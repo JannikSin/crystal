@@ -1156,18 +1156,18 @@ function renderMoneyDetail(ticker) {
     seg.appendChild(b);
   });
   det.appendChild(seg);
-  var chartCard = el("div", { class: "chartcard", id: "chartcard" },
+  var chartCard = el("div", { class: "chartcard" },
     '<p class="empty" style="margin:30px 0">loading…</p>');
   det.appendChild(chartCard);
+  // the callback may fire synchronously (client cache) before chartCard is in
+  // the document, so hold the element itself, never getElementById
   refPrice(ticker, range, function (h) {
-    var cc = document.getElementById("chartcard");
-    if (!cc) return;
     if (!h || !h.points || !h.points.length) {
-      cc.innerHTML = '<p class="empty" style="margin:26px 0">' +
+      chartCard.innerHTML = '<p class="empty" style="margin:26px 0">' +
         (h && h.error ? "Chart unavailable: " + md(h.error) : "No chart data for this range.") + "</p>";
       return;
     }
-    drawChart(cc, h, range);
+    drawChart(chartCard, h, range);
   });
 
   // ---- lots ----
