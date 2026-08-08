@@ -4,11 +4,18 @@
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const TICKER_RE = /^[A-Z][A-Z0-9.\-]{0,9}$/;
+// hash ids (10 hex) or stable slugs (sleep-lights-out). One bound, shared by
+// the Worker, pull_ticks and the client slugifier: 3 to 41 chars, lowercase.
+export const ID_RE = /^[a-z0-9][a-z0-9-]{2,40}$/;
+// the only base64 that still rides inside a payload: the brief's scan thumbnail
+export const IMG_DATAURL_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
 const STORY_ID_RE = /^[a-z0-9][a-z0-9-]{1,60}$/;
 
 const isStr = (v) => typeof v === "string";
 const isNum = (v) => typeof v === "number" && isFinite(v);
 const isArr = Array.isArray;
+const isTxt = (v) => isStr(v) && !!v.trim();
+const isHttps = (v) => isStr(v) && v.startsWith("https://");
 
 // ---------- news ----------
 // {date, built, stories:[{id, cat, rank, headline, oneLiner, facts[], context,
@@ -130,6 +137,217 @@ export function validateHoldings(p) {
       if (!isStr(e.label) || !e.label.trim()) return `${at}.nextEvent.label required`;
       if (e.gate !== undefined && !isStr(e.gate)) return `${at}.nextEvent.gate must be a string`;
     }
+  }
+  return null;
+}
+
+// ---------- brief v2 (the timeline payload) ----------
+// {v:2, date, day, strap?, built, scoreboard?[], reward?, feedbackNote?,
+//  scanThumb? (data:image/jpeg;base64 under 40KB),
+//  timeline:[{id, t, label, tier, kind?, target?, section?, floor?, state?}]}
+// v1 payloads are legacy and stay unvalidated; the Worker only calls this
+// when body.v === 2.
+const SLOTS = ["dawn", "morning", "day", "evening", "night"];
+const TIERS = ["floor", "spine", "work", "flex"];
+const THUMB_MAX = 40 * 1024;
+
+function validateReward(r) {
+  if (!r || typeof r !== "object") return "reward must be an object";
+  if (!isArr(r.heldWindow)) return "reward.heldWindow must be an array";
+  if (r.heldWindow.length > 35) return "reward.heldWindow: more than 35 days";
+  for (let i = 0; i < r.heldWindow.length; i++) {
+    const w = r.heldWindow[i];
+    const at = `reward.heldWindow[${i}]`;
+    if (!w || typeof w !== "object") return `${at} must be an object`;
+    if (!DATE_RE.test(w.d || "")) return `${at}.d must be YYYY-MM-DD`;
+    if (typeof w.held !== "boolean" && w.held !== null)
+      return `${at}.held must be true, false or null (dark day)`;
+  }
+  if (r.weeklyLive !== undefined && typeof r.weeklyLive !== "boolean")
+    return "reward.weeklyLive must be a boolean";
+  if (r.weeklyCountdown !== undefined && !isNum(r.weeklyCountdown))
+    return "reward.weeklyCountdown must be a number";
+  if (r.monthlyCountdown !== undefined && !isNum(r.monthlyCountdown))
+    return "reward.monthlyCountdown must be a number";
+  if (r.outstanding !== undefined && r.outstanding !== null) {
+    const o = r.outstanding;
+    if (typeof o !== "object") return "reward.outstanding must be an object";
+    if (!ID_RE.test(o.id || "")) return `reward.outstanding.id must match ${ID_RE}`;
+    if (!isTxt(o.kind)) return "reward.outstanding.kind required (weekly|monthly)";
+    if (!isTxt(o.pick)) return "reward.outstanding.pick required (name the thing)";
+    if (!DATE_RE.test(o.issued || "")) return "reward.outstanding.issued must be YYYY-MM-DD";
+    if (!DATE_RE.test(o.expires || "")) return "reward.outstanding.expires must be YYYY-MM-DD";
+  }
+  if (r.procurement !== undefined && !isStr(r.procurement))
+    return "reward.procurement must be a string";
+  if (r.dailyPick !== undefined && !isStr(r.dailyPick)) return "reward.dailyPick must be a string";
+  if (r.dailyAlt !== undefined && (!isArr(r.dailyAlt) || !r.dailyAlt.every(isStr)))
+    return "reward.dailyAlt must be an array of strings";
+  if (r.fullPick !== undefined && !isStr(r.fullPick)) return "reward.fullPick must be a string";
+  return null;
+}
+
+export function validateBriefV2(p) {
+  if (!p || typeof p !== "object") return "payload must be a JSON object";
+  if (p.v !== 2) return "v must be 2";
+  if (!DATE_RE.test(p.date || "")) return "date must be YYYY-MM-DD";
+  if (!isTxt(p.day)) return "day required (Saturday)";
+  if (!isStr(p.built)) return "built (ISO timestamp string) required";
+  if (p.strap !== undefined && !isStr(p.strap)) return "strap must be a string";
+  if (p.scoreboard !== undefined && !isArr(p.scoreboard)) return "scoreboard must be an array";
+  if (p.feedbackNote !== undefined && !isStr(p.feedbackNote))
+    return "feedbackNote must be a string";
+  if (p.scanThumb !== undefined) {
+    if (!isStr(p.scanThumb) || !IMG_DATAURL_RE.test(p.scanThumb))
+      return "scanThumb must be a data:image/jpeg;base64 URL";
+    if (p.scanThumb.length > THUMB_MAX) return "scanThumb over 40KB, downscale it";
+  }
+  if (p.reward !== undefined && p.reward !== null) {
+    const bad = validateReward(p.reward);
+    if (bad) return bad;
+  }
+  if (!isArr(p.timeline)) return "timeline must be an array";
+  if (p.timeline.length > 40) return "timeline: more than 40 items, that is not a day";
+  const seen = new Set();
+  for (let i = 0; i < p.timeline.length; i++) {
+    const it = p.timeline[i];
+    const at = `timeline[${i}]`;
+    if (!it || typeof it !== "object") return `${at} must be an object`;
+    if (!ID_RE.test(it.id || "")) return `${at}.id must match ${ID_RE}`;
+    if (seen.has(it.id)) return `${at}.id "${it.id}" is a duplicate`;
+    seen.add(it.id);
+    if (!SLOTS.includes(it.t)) return `${at}.t must be one of ${SLOTS.join("|")}`;
+    if (!isTxt(it.label)) return `${at}.label required`;
+    if (!TIERS.includes(it.tier)) return `${at}.tier must be one of ${TIERS.join("|")}`;
+    for (const f of ["kind", "target", "section", "qid", "detail", "ticklabel"])
+      if (it[f] !== undefined && !isStr(it[f])) return `${at}.${f} must be a string`;
+    for (const f of ["floor", "state"])
+      if (it[f] !== undefined && typeof it[f] !== "boolean")
+        return `${at}.${f} must be a boolean`;
+  }
+  return null;
+}
+
+// ---------- listen ----------
+// {built, queue:[{id, tags[], show, title, note?, length?, link, kind}],
+//  history?:[{id, title, ...}], music?:[{label, link}],
+//  audiobook?:{current, where[], activities[]}}
+const LISTEN_KINDS = ["podcast", "audiobook", "music"];
+
+export function validateListen(p) {
+  if (!p || typeof p !== "object") return "payload must be a JSON object";
+  if (!isStr(p.built)) return "built (ISO timestamp string) required";
+  if (!isArr(p.queue)) return "queue must be an array";
+  if (p.queue.length > 100) return "queue: more than 100 items, trim it";
+  const seen = new Set();
+  for (let i = 0; i < p.queue.length; i++) {
+    const q = p.queue[i];
+    const at = `queue[${i}]`;
+    if (!q || typeof q !== "object") return `${at} must be an object`;
+    if (!ID_RE.test(q.id || "")) return `${at}.id must match ${ID_RE}`;
+    if (seen.has(q.id)) return `${at}.id "${q.id}" is a duplicate`;
+    seen.add(q.id);
+    if (!isArr(q.tags) || !q.tags.every(isStr)) return `${at}.tags must be an array of strings`;
+    if (q.show !== undefined && !isStr(q.show)) return `${at}.show must be a string`;
+    if (!isTxt(q.title)) return `${at}.title required`;
+    if (q.note !== undefined && !isStr(q.note)) return `${at}.note must be a string`;
+    if (q.length !== undefined && !isStr(q.length) && !isNum(q.length))
+      return `${at}.length must be a string or a number of minutes`;
+    if (q.link !== undefined && !isHttps(q.link)) return `${at}.link must be an https URL`;
+    if (!LISTEN_KINDS.includes(q.kind)) return `${at}.kind must be ${LISTEN_KINDS.join("|")}`;
+  }
+  if (p.history !== undefined) {
+    if (!isArr(p.history)) return "history must be an array";
+    if (p.history.length > 500) return "history: more than 500 entries, the tape is long enough";
+    for (let i = 0; i < p.history.length; i++) {
+      const h = p.history[i];
+      if (!h || typeof h !== "object") return `history[${i}] must be an object`;
+      if (!ID_RE.test(h.id || "")) return `history[${i}].id must match ${ID_RE}`;
+      if (!isTxt(h.title)) return `history[${i}].title required`;
+    }
+  }
+  if (p.music !== undefined) {
+    if (!isArr(p.music)) return "music must be an array";
+    for (let i = 0; i < p.music.length; i++) {
+      const m = p.music[i];
+      if (!m || typeof m !== "object") return `music[${i}] must be an object`;
+      if (!isTxt(m.label)) return `music[${i}].label required`;
+      if (!isHttps(m.link)) return `music[${i}].link must be an https URL`;
+    }
+  }
+  if (p.audiobook !== undefined && p.audiobook !== null) {
+    const a = p.audiobook;
+    if (typeof a !== "object") return "audiobook must be an object";
+    if (!isTxt(a.current)) return "audiobook.current required";
+    const whereOk = (w) => isStr(w) || (w && typeof w === "object" && isStr(w.label));
+    if (!isArr(a.where) || !a.where.every(whereOk))
+      return "audiobook.where must be an array of strings or {label, note} rows";
+    if (!isArr(a.activities) || !a.activities.every(isStr))
+      return "audiobook.activities must be an array of strings";
+  }
+  return null;
+}
+
+// ---------- career ----------
+// {built, spotlight?:{rank, name, facet, text}, roster:[same], cap 40,
+//  outreach?:{name, body, tickId}, signals?:{date, items[]}, aeroDated?}
+function validateCompany(c, at) {
+  if (!c || typeof c !== "object") return `${at} must be an object`;
+  if (!isNum(c.rank)) return `${at}.rank must be a number`;
+  if (!isTxt(c.name)) return `${at}.name required`;
+  if (!isTxt(c.facet)) return `${at}.facet required (which angle is on show today)`;
+  if (!isStr(c.text)) return `${at}.text must be a string`;
+  return null;
+}
+
+export function validateCareer(p) {
+  if (!p || typeof p !== "object") return "payload must be a JSON object";
+  if (!isStr(p.built)) return "built (ISO timestamp string) required";
+  if (p.spotlight !== undefined && p.spotlight !== null) {
+    const bad = validateCompany(p.spotlight, "spotlight");
+    if (bad) return bad;
+  }
+  if (!isArr(p.roster)) return "roster must be an array";
+  if (p.roster.length > 40) return "roster: more than 40 companies, that is a list not a roster";
+  for (let i = 0; i < p.roster.length; i++) {
+    const bad = validateCompany(p.roster[i], `roster[${i}]`);
+    if (bad) return bad;
+  }
+  if (p.outreach !== undefined && p.outreach !== null) {
+    const o = p.outreach;
+    if (typeof o !== "object") return "outreach must be an object";
+    if (!isTxt(o.name)) return "outreach.name required (name the person)";
+    if (!isStr(o.body)) return "outreach.body must be a string";
+    if (!ID_RE.test(o.tickId || "")) return `outreach.tickId must match ${ID_RE}`;
+  }
+  if (p.signals !== undefined && p.signals !== null) {
+    const s = p.signals;
+    if (typeof s !== "object") return "signals must be an object";
+    if (!DATE_RE.test(s.date || "")) return "signals.date must be YYYY-MM-DD";
+    if (!isArr(s.items) || !s.items.every(isStr))
+      return "signals.items must be an array of strings";
+  }
+  if (p.aeroDated !== undefined && !isStr(p.aeroDated)) return "aeroDated must be a string";
+  return null;
+}
+
+// ---------- feedback ----------
+// {date, items:[{qid, transcriptExcerpt, grade, workshop, bestAnswerRef?}]}
+export function validateFeedback(p) {
+  if (!p || typeof p !== "object") return "payload must be a JSON object";
+  if (!DATE_RE.test(p.date || "")) return "date must be YYYY-MM-DD";
+  if (!isArr(p.items)) return "items must be an array";
+  if (p.items.length > 20) return "items: more than 20 graded answers for one day";
+  for (let i = 0; i < p.items.length; i++) {
+    const it = p.items[i];
+    const at = `items[${i}]`;
+    if (!it || typeof it !== "object") return `${at} must be an object`;
+    if (!ID_RE.test(it.qid || "")) return `${at}.qid must match ${ID_RE}`;
+    if (!isStr(it.transcriptExcerpt)) return `${at}.transcriptExcerpt must be a string`;
+    if (!isStr(it.grade) && !isNum(it.grade)) return `${at}.grade must be a string or a number`;
+    if (!isStr(it.workshop)) return `${at}.workshop must be a string`;
+    if (it.bestAnswerRef !== undefined && !isStr(it.bestAnswerRef))
+      return `${at}.bestAnswerRef must be a string`;
   }
   return null;
 }

@@ -1,10 +1,20 @@
 // Self-check for the Crystal Worker's payload contracts (news, markets,
-// holdings). Imports the exact validators the Worker runs, feeds them a good
-// fixture and a set of deliberately broken ones, and asserts each break is
-// caught with an error that names the field. No network, no state.
+// holdings, brief v2, listen, career, feedback). Imports the exact validators
+// the Worker runs, feeds them a good fixture and a set of deliberately broken
+// ones, and asserts each break is caught with an error that names the field.
+// Fixture values are fake on purpose. No network, no state.
 //
 //     node tools/test_schemas.mjs
-import { validateNews, validateMarkets, validateHoldings } from "../worker/src/validate.js";
+import {
+  validateNews,
+  validateMarkets,
+  validateHoldings,
+  validateBriefV2,
+  validateListen,
+  validateCareer,
+  validateFeedback,
+  ID_RE,
+} from "../worker/src/validate.js";
 import assert from "node:assert";
 
 const story = (over = {}) => ({
@@ -99,5 +109,208 @@ assert.match(validateHoldings(brokenTicker), /ticker/);
 const brokenBreaker = JSON.parse(JSON.stringify(goodHoldings));
 brokenBreaker.positions[0].breakers = [{ text: "x" }];
 assert.match(validateHoldings(brokenBreaker), /status/);
+
+// ---------- id bound: 3 to 41 chars, lowercase, shared everywhere ----------
+assert.ok(ID_RE.test("abc"), "three chars is the floor and must pass");
+assert.ok(!ID_RE.test("ab"), "two chars must fail");
+assert.ok(ID_RE.test("sleep-lights-out"));
+assert.ok(ID_RE.test("a".repeat(41)), "41 chars is the ceiling");
+assert.ok(!ID_RE.test("a".repeat(42)), "42 chars must fail, the old bound was 61");
+assert.ok(!ID_RE.test("-leading-dash"));
+assert.ok(!ID_RE.test("Has-Caps"));
+assert.ok(!ID_RE.test("has spaces"));
+
+// ---------- brief v2 ----------
+const tl = (over = {}) => ({
+  id: "sleep-lights-out",
+  t: "night",
+  label: "Lights out",
+  tier: "floor",
+  kind: "task",
+  section: "Floor",
+  floor: true,
+  state: false,
+  ...over,
+});
+
+const goodBrief = {
+  v: 2,
+  date: "2026-08-08",
+  day: "Saturday",
+  strap: "One block tonight.",
+  built: "2026-08-08T06:30:00",
+  scoreboard: [{ label: "Done", value: 3 }],
+  timeline: [tl({ id: "paper-of-the-day", t: "evening", tier: "spine", floor: false }), tl()],
+  reward: {
+    heldWindow: [
+      { d: "2026-08-06", held: true },
+      { d: "2026-08-07", held: null },
+      { d: "2026-08-08", held: false },
+    ],
+    weeklyLive: false,
+    weeklyCountdown: 2,
+    monthlyCountdown: 6,
+    outstanding: {
+      id: "weekly-courts",
+      kind: "weekly",
+      pick: "Saturday 2pm, Ben, the courts",
+      issued: "2026-08-05",
+      expires: "2026-08-12",
+    },
+    procurement: "Text Ben tonight.",
+    dailyPick: "The Bear, one episode",
+    dailyAlt: ["A chapter of Zebras"],
+    fullPick: "70mm screening downtown",
+  },
+  scanThumb: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==",
+  feedbackNote: "3 recorded, 0 graded, transcriber last ran Aug 5.",
+};
+
+assert.equal(validateBriefV2(goodBrief), null, "good brief v2 payload must pass");
+assert.equal(validateBriefV2({ ...goodBrief, reward: undefined, scanThumb: undefined }), null);
+assert.match(validateBriefV2({ ...goodBrief, v: 1 }), /v must be 2/);
+assert.match(validateBriefV2({ ...goodBrief, date: "tomorrow" }), /date/);
+assert.match(validateBriefV2({ ...goodBrief, day: "" }), /day/);
+assert.match(validateBriefV2({ ...goodBrief, built: 5 }), /built/);
+assert.match(validateBriefV2({ ...goodBrief, timeline: "x" }), /timeline/);
+assert.match(validateBriefV2({ ...goodBrief, timeline: [tl({ id: "NOPE" })] }), /id/);
+assert.match(validateBriefV2({ ...goodBrief, timeline: [tl(), tl()] }), /duplicate/);
+assert.match(validateBriefV2({ ...goodBrief, timeline: [tl({ t: "lunch" })] }), /\.t must/);
+assert.match(validateBriefV2({ ...goodBrief, timeline: [tl({ label: "  " })] }), /label/);
+assert.match(validateBriefV2({ ...goodBrief, timeline: [tl({ tier: "bonus" })] }), /tier/);
+assert.match(validateBriefV2({ ...goodBrief, timeline: [tl({ floor: "yes" })] }), /floor/);
+assert.match(
+  validateBriefV2({ ...goodBrief, timeline: Array.from({ length: 41 }, (_, i) => tl({ id: `item-${i}` })) }),
+  /timeline/,
+);
+assert.match(validateBriefV2({ ...goodBrief, scanThumb: "data:image/png;base64,AAAA" }), /scanThumb/);
+assert.match(
+  validateBriefV2({ ...goodBrief, scanThumb: "data:image/jpeg;base64," + "A".repeat(41000) }),
+  /40KB/,
+);
+const brokenWindow = JSON.parse(JSON.stringify(goodBrief));
+brokenWindow.reward.heldWindow[0].d = "Wednesday";
+assert.match(validateBriefV2(brokenWindow), /heldWindow\[0\]\.d/);
+const brokenHeld = JSON.parse(JSON.stringify(goodBrief));
+brokenHeld.reward.heldWindow[1].held = "maybe";
+assert.match(validateBriefV2(brokenHeld), /held/);
+const brokenGrant = JSON.parse(JSON.stringify(goodBrief));
+brokenGrant.reward.outstanding.pick = "";
+assert.match(validateBriefV2(brokenGrant), /outstanding\.pick/);
+const brokenExpiry = JSON.parse(JSON.stringify(goodBrief));
+brokenExpiry.reward.outstanding.expires = "soon";
+assert.match(validateBriefV2(brokenExpiry), /expires/);
+
+// ---------- listen ----------
+const ep = (over = {}) => ({
+  id: "acquired-tsmc",
+  tags: ["tech-founders"],
+  show: "Acquired",
+  title: "TSMC, part one",
+  note: "Long one, split it over two commutes.",
+  length: 212,
+  link: "https://example.com/acquired-tsmc",
+  kind: "podcast",
+  ...over,
+});
+
+const goodListen = {
+  built: "2026-08-08T06:30:00",
+  queue: [ep(), ep({ id: "zebras-ch4", show: "Zebras", title: "Chapter 4", kind: "audiobook", length: "48m" })],
+  history: [{ id: "acquired-nvidia", title: "Nvidia, part three", at: "2026-08-01" }],
+  music: [{ label: "Deep work", link: "https://example.com/playlist" }],
+  audiobook: {
+    current: "Why Zebras Do Not Get Ulcers",
+    where: ["Libby", "Spotify", "Audible"],
+    activities: ["gym", "commute", "chores"],
+  },
+};
+
+assert.equal(validateListen(goodListen), null, "good listen payload must pass");
+assert.equal(validateListen({ built: "x", queue: [] }), null, "an empty queue is legal");
+assert.match(validateListen({ ...goodListen, built: 5 }), /built/);
+assert.match(validateListen({ ...goodListen, queue: "x" }), /queue/);
+assert.match(validateListen({ ...goodListen, queue: [ep({ id: "no" })] }), /id/);
+assert.match(validateListen({ ...goodListen, queue: [ep(), ep()] }), /duplicate/);
+assert.match(validateListen({ ...goodListen, queue: [ep({ tags: [1] })] }), /tags/);
+assert.match(validateListen({ ...goodListen, queue: [ep({ show: 5 })] }), /show/);
+assert.equal(validateListen({ ...goodListen, queue: [ep({ show: undefined })] }), null,
+  "show is optional; the pipeline folds it into title");
+assert.match(validateListen({ ...goodListen, queue: [ep({ link: "http://example.com" })] }), /link/);
+assert.match(validateListen({ ...goodListen, queue: [ep({ kind: "video" })] }), /kind/);
+assert.match(
+  validateListen({ ...goodListen, queue: Array.from({ length: 101 }, (_, i) => ep({ id: `ep-${i}` })) }),
+  /queue/,
+);
+assert.match(validateListen({ ...goodListen, history: [{ id: "x", title: "y" }] }), /history\[0\]\.id/);
+assert.match(validateListen({ ...goodListen, music: [{ label: "x", link: "spotify:uri" }] }), /music\[0\]\.link/);
+assert.match(validateListen({ ...goodListen, audiobook: { current: "", where: [], activities: [] } }), /current/);
+assert.match(
+  validateListen({ ...goodListen, audiobook: { current: "Behave", where: "Libby", activities: [] } }),
+  /where/,
+);
+
+// ---------- career ----------
+const co = (over = {}) => ({
+  rank: 1,
+  name: "Ursa Major",
+  facet: "Hadley engine test cadence",
+  text: "Small team, they publish hotfire cadence in press notes.",
+  ...over,
+});
+
+const goodCareer = {
+  built: "2026-08-08T06:30:00",
+  spotlight: co(),
+  roster: [co(), co({ rank: 2, name: "Agile Space" })],
+  outreach: { name: "Jane Doe", body: "Short note about the annulus work.", tickId: "outreach-jane-doe" },
+  signals: { date: "2026-08-08", items: ["Two new test-stand roles posted."] },
+  aeroDated: "Week of Aug 3",
+};
+
+assert.equal(validateCareer(goodCareer), null, "good career payload must pass");
+assert.equal(validateCareer({ built: "x", roster: [] }), null, "an empty roster is legal");
+assert.match(validateCareer({ ...goodCareer, built: 5 }), /built/);
+assert.match(validateCareer({ ...goodCareer, roster: "x" }), /roster/);
+assert.match(validateCareer({ ...goodCareer, roster: [co({ rank: "one" })] }), /rank/);
+assert.match(validateCareer({ ...goodCareer, roster: [co({ name: " " })] }), /name/);
+assert.match(validateCareer({ ...goodCareer, roster: [co({ facet: "" })] }), /facet/);
+assert.match(validateCareer({ ...goodCareer, spotlight: co({ text: 12 }) }), /spotlight\.text/);
+assert.match(
+  validateCareer({ ...goodCareer, roster: Array.from({ length: 41 }, () => co()) }),
+  /roster/,
+);
+assert.match(
+  validateCareer({ ...goodCareer, outreach: { name: "Jane", body: "x", tickId: "NOPE" } }),
+  /tickId/,
+);
+assert.match(validateCareer({ ...goodCareer, signals: { date: "friday", items: [] } }), /signals\.date/);
+assert.match(
+  validateCareer({ ...goodCareer, signals: { date: "2026-08-08", items: [7] } }),
+  /signals\.items/,
+);
+
+// ---------- feedback ----------
+const goodFeedback = {
+  date: "2026-08-08",
+  items: [
+    {
+      qid: "roundtable-hardest-call",
+      transcriptExcerpt: "The hardest call was cutting the second annulus sweep.",
+      grade: "B, the number is missing",
+      workshop: "Name the margin you bought, in percent.",
+      bestAnswerRef: "Interview-Prep/Best-Answers.md#roundtable-hardest-call",
+    },
+  ],
+};
+
+assert.equal(validateFeedback(goodFeedback), null, "good feedback payload must pass");
+assert.match(validateFeedback({ ...goodFeedback, date: "" }), /date/);
+assert.match(validateFeedback({ ...goodFeedback, items: "x" }), /items/);
+assert.match(validateFeedback({ date: "2026-08-08", items: [{ qid: "ab" }] }), /qid/);
+assert.match(
+  validateFeedback({ date: "2026-08-08", items: [{ ...goodFeedback.items[0], workshop: 3 }] }),
+  /workshop/,
+);
 
 console.log("test_schemas: all assertions passed");

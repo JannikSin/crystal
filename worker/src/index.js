@@ -29,20 +29,58 @@
 // suffix on US symbols. Every provider failure degrades to the last cached
 // value with stale:true; these endpoints never 500 the app.
 //
-// Auth on every route: x-brief-key header or ?key= query param.
-// ponytail: single-user KV read-modify-write on /ticks and /newsread; last
-// write wins. Fine for one phone; a Durable Object if a second writer appears.
+// Crystal v4 additions:
+//   POST /scan?date=          phone uploads the handwritten list, raw JPEG bytes
+//   GET  /scan?date=          that JPEG back, image/jpeg
+//   POST /answer?date=&qid=   phone uploads one spoken answer, raw audio bytes
+//   GET  /answer?date=        index of that day's answers        (laptop only)
+//   GET  /answer?date=&qid=   the audio bytes                    (laptop only)
+//   DELETE /answer?date=&qid= transcriber drops audio once it has the text
+//   POST /feedback            laptop pushes graded answers (validated)
+//   GET  /feedback?date=      the grades for a date
+//   POST /listen              laptop pushes the queue (validated)
+//   GET  /listen              the queue
+//   POST /career              laptop pushes roster + outreach (validated)
+//   GET  /career              the roster
+//
+// scan:/answer:/feedback: keys carry a 14 day expirationTtl. Nothing else does,
+// because the vault merge depends on pulling ticks and captures on its own clock.
+// Media never rides inside JSON: those routes take raw bytes, no base64.
+//
+// Auth: x-brief-key header only, no query param. Two roles. BRIEF_KEY (laptop)
+// does everything. PHONE_KEY does GET on any payload route plus POST on
+// ticks/capture/newsread/scan/answer. It never pushes a payload, never reads or
+// deletes /answer. BRIEF_KEYS / PHONE_KEYS take comma separated sets so a key
+// can rotate without a window of 401s.
+// ponytail: single-user KV read-modify-write on /ticks, /newsread and the
+// answer index; last write wins. Fine for one phone; a Durable Object if a
+// second writer appears.
 
-import { validateNews, validateMarkets, validateHoldings, DATE_RE, TICKER_RE } from "./validate.js";
+import {
+  validateNews,
+  validateMarkets,
+  validateHoldings,
+  validateBriefV2,
+  validateListen,
+  validateCareer,
+  validateFeedback,
+  DATE_RE,
+  TICKER_RE,
+  ID_RE,
+} from "./validate.js";
 
+const ORIGIN = "https://janniksin.github.io";
 const CORS = {
-  "access-control-allow-origin": "*",
+  "access-control-allow-origin": ORIGIN,
   "access-control-allow-headers": "content-type, x-brief-key",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+  vary: "origin",
 };
 const MAX_BODY = 1024 * 1024;
-// hash ids (10 hex) or stable slugs (sleep-lights-out), same rule as crystal_serve.py
-const ID_RE = /^[a-z0-9][a-z0-9-]{2,60}$/;
+// encoded caps per route, checked on content-length before anything is read
+const BODY_CAP = { "/scan": 2 * 1024 * 1024, "/answer": 6 * 1024 * 1024 };
+const BLOB_TTL = 14 * 24 * 3600;
+const AUDIO_TYPES = ["audio/mp4", "audio/m4a", "audio/aac", "audio/webm"];
 const QUOTE_TTL = 15 * 60 * 1000;
 const HIST_TTL = 24 * 60 * 60 * 1000;
 const INTRADAY_TTL = 15 * 60 * 1000;
@@ -60,22 +98,83 @@ function raw200(text) {
   });
 }
 
-function authorized(request, url, env) {
-  if (!env.BRIEF_KEY) return false;
-  const k = request.headers.get("x-brief-key") || url.searchParams.get("key") || "";
-  return k.length === env.BRIEF_KEY.length && k === env.BRIEF_KEY;
+// ---------- auth: two roles, constant-time compare, header only ----------
+
+// BRIEF_KEY plus the comma separated BRIEF_KEYS rotation set, same for phone
+function keySet(env, ...names) {
+  const out = [];
+  for (const n of names)
+    for (const part of String(env[n] || "").split(",")) {
+      const k = part.trim();
+      if (k) out.push(k);
+    }
+  return out;
+}
+
+// XOR every char so a wrong key costs the same time as a nearly-right one.
+// Length still short-circuits; key length is not the secret, the bytes are.
+function sameKey(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function role(request, env) {
+  const k = request.headers.get("x-brief-key") || "";
+  if (!k) return null;
+  for (const b of keySet(env, "BRIEF_KEY", "BRIEF_KEYS")) if (sameKey(k, b)) return "laptop";
+  for (const p of keySet(env, "PHONE_KEY", "PHONE_KEYS")) if (sameKey(k, p)) return "phone";
+  return null;
+}
+
+// The phone reads everything it renders and writes only what the user taps.
+// It never pushes a payload, never touches raw answer audio, never deletes.
+const PHONE_POST = ["/ticks", "/capture", "/newsread", "/scan", "/answer"];
+function phoneAllowed(method, path) {
+  if (method === "GET") return path !== "/answer";
+  if (method === "POST") return PHONE_POST.includes(path);
+  return false;
 }
 
 const clip = (v, n) => String(v ?? "").slice(0, n);
 
-async function readBody(request) {
+const capFor = (path) => BODY_CAP[path] || MAX_BODY;
+
+// content-length is the cheap gate: refuse before a byte is read. Bodies that
+// arrive without one (chunked) still hit the post-read backstop below.
+function overCap(request, cap) {
+  const n = Number(request.headers.get("content-length") || 0);
+  return n > cap;
+}
+
+async function readBody(request, cap = MAX_BODY) {
+  if (overCap(request, cap)) return { err: json(413, { error: "too large" }) };
   const raw = await request.text();
-  if (raw.length > MAX_BODY) return { err: json(413, { error: "too large" }) };
+  if (raw.length > cap) return { err: json(413, { error: "too large" }) };
   try {
     return { raw, body: JSON.parse(raw) };
   } catch {
     return { err: json(400, { error: "invalid JSON" }) };
   }
+}
+
+// Raw bytes in, same two gates, plus the declared content-type must be one we
+// asked for. Returns {err} or {buf}.
+async function readBlob(request, cap, types) {
+  const ct = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (!types.includes(ct)) return { err: json(415, { error: `content-type must be ${types.join("|")}` }) };
+  if (overCap(request, cap)) return { err: json(413, { error: "too large" }) };
+  const buf = await request.arrayBuffer();
+  if (buf.byteLength > cap) return { err: json(413, { error: "too large" }) };
+  if (!buf.byteLength) return { err: json(400, { error: "empty body" }) };
+  return { buf, ct };
+}
+
+function bytes200(buf, type) {
+  return new Response(buf, {
+    headers: { "content-type": type, "cache-control": "no-store", ...CORS },
+  });
 }
 
 // Store under <prefix>:<date>, and under <prefix>:latest unless an older date
@@ -91,6 +190,25 @@ async function putDated(env, prefix, date, raw) {
 
 async function getDated(env, prefix, qdate) {
   return env.STORE.get(qdate ? `${prefix}:${qdate}` : `${prefix}:latest`);
+}
+
+// One index per date so the laptop can list a day's answers without a KV list
+// call. Expires with the audio it points at.
+async function answerIndex(env, date) {
+  try {
+    const cur = JSON.parse((await env.STORE.get(`answeridx:${date}`)) || "{}");
+    return Array.isArray(cur.items) ? cur.items : [];
+  } catch {
+    return [];
+  }
+}
+
+async function putAnswerIndex(env, date, items) {
+  await env.STORE.put(
+    `answeridx:${date}`,
+    JSON.stringify({ date, items, updated: new Date().toISOString() }),
+    { expirationTtl: BLOB_TTL },
+  );
 }
 
 // ---------- quotes: Yahoo primary, Stooq fallback, stale-serving cache ----------
@@ -224,14 +342,18 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS });
     }
-    if (!authorized(request, url, env)) return json(401, { error: "bad key" });
-
-    const qdate = url.searchParams.get("date") || "";
-    if (qdate && !DATE_RE.test(qdate)) return json(400, { error: "bad date" });
     const path = url.pathname;
     const method = request.method;
 
-    // ---------- brief (unchanged) ----------
+    const who = role(request, env);
+    if (!who) return json(401, { error: "bad key" });
+    if (who === "phone" && !phoneAllowed(method, path))
+      return json(403, { error: "laptop key required for this route" });
+
+    const qdate = url.searchParams.get("date") || "";
+    if (qdate && !DATE_RE.test(qdate)) return json(400, { error: "bad date" });
+
+    // ---------- brief ----------
     if (path === "/brief" && method === "GET") {
       const raw = await getDated(env, "brief", qdate);
       if (!raw) return json(404, { error: "no brief yet" });
@@ -241,12 +363,18 @@ export default {
     if (path === "/brief" && method === "POST") {
       const { raw, body, err } = await readBody(request);
       if (err) return err;
-      if (!DATE_RE.test(body?.date || "")) return json(400, { error: "brief.date required" });
+      // v2 is the timeline payload and gets checked; v1 stays legacy and does not
+      if (body?.v === 2) {
+        const bad = validateBriefV2(body);
+        if (bad) return json(400, { error: bad });
+      } else if (!DATE_RE.test(body?.date || "")) {
+        return json(400, { error: "brief.date required" });
+      }
       await putDated(env, "brief", body.date, raw);
       return json(200, { ok: true, date: body.date, bytes: raw.length });
     }
 
-    // ---------- ticks (unchanged) ----------
+    // ---------- ticks ----------
     if (path === "/ticks" && method === "GET") {
       if (!qdate) return json(400, { error: "date required" });
       const raw = await env.STORE.get(`ticks:${qdate}`);
@@ -276,7 +404,7 @@ export default {
           label: clip(body.label, 200),
           target: clip(body.target, 120),
           at: clip(body.at, 40) || new Date().toISOString(),
-          via: "phone",
+          via: clip(body.via, 16) || "phone",
         };
       } else {
         delete items[id];
@@ -393,6 +521,121 @@ export default {
       if (bad) return json(400, { error: bad });
       await env.STORE.put("holdings:latest", raw);
       return json(200, { ok: true, asOf: body.asOf, positions: body.positions.length });
+    }
+
+    // ---------- listen ----------
+    if (path === "/listen" && method === "GET") {
+      const raw = await env.STORE.get("listen:latest");
+      if (!raw) return json(404, { error: "no queue yet" });
+      return raw200(raw);
+    }
+
+    if (path === "/listen" && method === "POST") {
+      const { raw, body, err } = await readBody(request);
+      if (err) return err;
+      const bad = validateListen(body);
+      if (bad) return json(400, { error: bad });
+      await env.STORE.put("listen:latest", raw);
+      return json(200, { ok: true, queue: body.queue.length });
+    }
+
+    // ---------- career ----------
+    if (path === "/career" && method === "GET") {
+      const raw = await env.STORE.get("career:latest");
+      if (!raw) return json(404, { error: "no roster yet" });
+      return raw200(raw);
+    }
+
+    if (path === "/career" && method === "POST") {
+      const { raw, body, err } = await readBody(request);
+      if (err) return err;
+      const bad = validateCareer(body);
+      if (bad) return json(400, { error: bad });
+      await env.STORE.put("career:latest", raw);
+      return json(200, { ok: true, roster: body.roster.length });
+    }
+
+    // ---------- scan: yesterday's handwritten list, raw JPEG ----------
+    if (path === "/scan" && method === "GET") {
+      if (!qdate) return json(400, { error: "date required" });
+      const buf = await env.STORE.get(`scan:${qdate}`, "arrayBuffer");
+      if (!buf) return json(404, { error: "no scan for that date" });
+      return bytes200(buf, "image/jpeg");
+    }
+
+    if (path === "/scan" && method === "POST") {
+      if (!qdate) return json(400, { error: "date required" });
+      const { buf, err } = await readBlob(request, capFor(path), ["image/jpeg"]);
+      if (err) return err;
+      const at = new Date().toISOString();
+      await env.STORE.put(`scan:${qdate}`, buf, { expirationTtl: BLOB_TTL });
+      await env.STORE.put(
+        `scanmeta:${qdate}`,
+        JSON.stringify({ date: qdate, bytes: buf.byteLength, at }),
+        { expirationTtl: BLOB_TTL },
+      );
+      return json(200, { ok: true, date: qdate, bytes: buf.byteLength });
+    }
+
+    // ---------- answer: one spoken interview rep, raw audio ----------
+    if (path === "/answer") {
+      const qid = url.searchParams.get("qid") || "";
+      if (!qdate) return json(400, { error: "date required" });
+      if (qid && !ID_RE.test(qid)) return json(400, { error: "bad qid" });
+
+      if (method === "POST") {
+        if (!qid) return json(400, { error: "qid required" });
+        const { buf, ct, err } = await readBlob(request, capFor(path), AUDIO_TYPES);
+        if (err) return err;
+        const at = new Date().toISOString();
+        const meta = { date: qdate, qid, bytes: buf.byteLength, type: ct, at };
+        await env.STORE.put(`answer:${qdate}:${qid}`, buf, { expirationTtl: BLOB_TTL });
+        await env.STORE.put(`answermeta:${qdate}:${qid}`, JSON.stringify(meta), {
+          expirationTtl: BLOB_TTL,
+        });
+        const items = (await answerIndex(env, qdate)).filter((i) => i && i.qid !== qid);
+        items.push({ qid, bytes: buf.byteLength, type: ct, at });
+        await putAnswerIndex(env, qdate, items.slice(-40));
+        return json(200, { ok: true, date: qdate, qid, bytes: buf.byteLength });
+      }
+
+      // laptop only past here: the phone allowlist blocks GET and DELETE
+      if (method === "GET" && !qid) return json(200, { items: await answerIndex(env, qdate) });
+
+      if (method === "GET") {
+        const buf = await env.STORE.get(`answer:${qdate}:${qid}`, "arrayBuffer");
+        if (!buf) return json(404, { error: "no answer for that date and qid" });
+        let type = "audio/mp4";
+        try {
+          type = JSON.parse((await env.STORE.get(`answermeta:${qdate}:${qid}`)) || "{}").type || type;
+        } catch {}
+        return bytes200(buf, type);
+      }
+
+      if (method === "DELETE") {
+        if (!qid) return json(400, { error: "qid required" });
+        await env.STORE.delete(`answer:${qdate}:${qid}`);
+        await env.STORE.delete(`answermeta:${qdate}:${qid}`);
+        const items = (await answerIndex(env, qdate)).filter((i) => i && i.qid !== qid);
+        await putAnswerIndex(env, qdate, items);
+        return json(200, { ok: true, date: qdate, qid, remaining: items.length });
+      }
+    }
+
+    // ---------- feedback: the graded answers coming back ----------
+    if (path === "/feedback" && method === "GET") {
+      if (!qdate) return json(400, { error: "date required" });
+      const raw = await env.STORE.get(`feedback:${qdate}`);
+      return raw200(raw || JSON.stringify({ date: qdate, items: [] }));
+    }
+
+    if (path === "/feedback" && method === "POST") {
+      const { raw, body, err } = await readBody(request);
+      if (err) return err;
+      const bad = validateFeedback(body);
+      if (bad) return json(400, { error: bad });
+      await env.STORE.put(`feedback:${body.date}`, raw, { expirationTtl: BLOB_TTL });
+      return json(200, { ok: true, date: body.date, items: body.items.length });
     }
 
     // ---------- quotes ----------

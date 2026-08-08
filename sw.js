@@ -4,11 +4,21 @@
 // last-known copies in localStorage.
 // Cache name must stay crystal-prefixed: the PWAs share the janniksin.github.io
 // origin and each SW deletes only its own prefix.
-const CACHE = "crystal-v1";
+const CACHE = "crystal-v4";
 
 const PRECACHE = [
   "./",
   "./index.html",
+  "./app.css",
+  "./core.js",
+  "./sync.js",
+  "./reward.js",
+  "./today.js",
+  "./news.js",
+  "./markets.js",
+  "./money.js",
+  "./career.js",
+  "./listen.js",
   "./app.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
