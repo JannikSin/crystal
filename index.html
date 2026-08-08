@@ -7,7 +7,7 @@
 <!-- Everything the app loads is its own file; the only outbound connection is
      the private Worker. No inline script (the SW registers from app.js), no
      remote anything, no base tag hijack. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://crystal-brief.janniksin.workers.dev; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://crystal-brief.janniksin.workers.dev; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#f3f2f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121118" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="./manifest.webmanifest">

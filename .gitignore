@@ -1,3 +1,10 @@
 node_modules/
 .wrangler/
 *.log
+
+# nothing real ever rides into a public repo: the portfolio fixture, a key file
+# dropped here by mistake, and the scan/answer test images
+holdings.json
+brief_key.txt
+*.jpg
+*.jpeg

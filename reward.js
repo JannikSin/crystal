@@ -20,8 +20,9 @@ const word = (n) => WORDS[n] || String(n);
 
 // payload: the brief v2 object. doneMap: {id: true|false} already merged by the
 // caller. latch: {daily, full} read from localStorage. swapIdx: ephemeral.
+// now: the clock, injected so the 22:00 expiry is testable.
 // Returns {lines:[], pick:{text, swappable}|null, latch:{daily, full}}.
-export function computeReward(payload, doneMap, latch, swapIdx) {
+export function computeReward(payload, doneMap, latch, swapIdx, now) {
   const out = { lines: [], pick: null, latch: { daily: false, full: false } };
   if (!payload || payload.v !== 2) return out;
   const r = payload.reward || null;
@@ -30,7 +31,10 @@ export function computeReward(payload, doneMap, latch, swapIdx) {
 
   const floor = items.filter((it) => it.floor === true);
   const floorClear = floor.length > 0 && floor.every(done);
-  const allClear = items.length > 0 && items.every(done);
+  // a fun item IS the grant, not work owed: an untaken one must never be the
+  // reason the whole-day pick stays shut
+  const owed = items.filter((it) => it.kind !== "fun");
+  const allClear = owed.length > 0 && owed.every(done);
 
   const wasDaily = !!(latch && latch.daily);
   const wasFull = !!(latch && latch.full);
@@ -43,7 +47,7 @@ export function computeReward(payload, doneMap, latch, swapIdx) {
   const wk = r.weeklyCountdown;
   if (typeof wk === "number" && wk > 0 && wk <= 2) {
     out.lines.push({
-      text: word(wk) + " more on the floor and the weekend pick comes live.",
+      text: word(wk) + " more on the floor and Saturday is live.",
       dim: false,
     });
   }
@@ -62,6 +66,10 @@ export function computeReward(payload, doneMap, latch, swapIdx) {
       dim: true,
     });
   }
+
+  // The grant expires at 22:00 and never banks, so past that hour there is no
+  // pick to render. The latch still stands: the day was still cleared.
+  if ((now instanceof Date ? now : new Date()).getHours() >= 22) return out;
 
   // the pick. A full day upgrades the SIZE of the suggestion, never whether.
   if (out.latch.full && r.fullPick) {

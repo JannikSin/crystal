@@ -58,6 +58,11 @@ assert.match(
 assert.match(validateNews({ ...goodNews, stories: [story({ sources: [] })] }), /sources/);
 assert.match(validateNews({ ...goodNews, stories: [story({ contested: true })] }), /interpretations/);
 assert.match(validateNews({ ...goodNews, stories: [story({ tickerTags: [1] })] }), /tickerTags/);
+// the category set is closed: an unknown one falls out of the app's label
+// table and renders as raw payload text
+assert.equal(validateNews({ ...goodNews, stories: [story({ cat: "Aerospace/Defense" })] }), null,
+  "the long labels the pipeline writes are legal");
+assert.match(validateNews({ ...goodNews, stories: [story({ cat: "Gardening" })] }), /cat/);
 
 const goodMarkets = {
   date: "2026-08-08",
@@ -71,6 +76,14 @@ assert.equal(validateMarkets(goodMarkets), null, "good markets payload must pass
 assert.match(validateMarkets({ ...goodMarkets, sections: [] }), /sections/);
 assert.match(validateMarkets({ ...goodMarkets, sections: [{ id: "x", md: "y" }] }), /title/);
 assert.match(validateMarkets({ ...goodMarkets, built: 5 }), /built/);
+// the ticker grid is the surface of this tab; a bad symbol renders as a chip
+assert.equal(
+  validateMarkets({ ...goodMarkets, tickers: [{ ticker: "VTI", status: "HOLDING", close: 291.4 }] }),
+  null,
+  "a tickers array is optional and legal",
+);
+assert.match(validateMarkets({ ...goodMarkets, tickers: "VTI" }), /tickers/);
+assert.match(validateMarkets({ ...goodMarkets, tickers: [{ ticker: "not a symbol" }] }), /tickers\[0\]\.ticker/);
 
 const goodHoldings = {
   asOf: "2026-08-08T17:45:00",
@@ -110,12 +123,13 @@ const brokenBreaker = JSON.parse(JSON.stringify(goodHoldings));
 brokenBreaker.positions[0].breakers = [{ text: "x" }];
 assert.match(validateHoldings(brokenBreaker), /status/);
 
-// ---------- id bound: 3 to 41 chars, lowercase, shared everywhere ----------
-assert.ok(ID_RE.test("abc"), "three chars is the floor and must pass");
-assert.ok(!ID_RE.test("ab"), "two chars must fail");
+// ---------- id bound: 1 to 40 chars, lowercase, shared everywhere ----------
+assert.ok(ID_RE.test("q1"), "a question id is legitimately two chars");
+assert.ok(ID_RE.test("a"), "one char is the floor");
+assert.ok(!ID_RE.test(""), "empty must fail");
 assert.ok(ID_RE.test("sleep-lights-out"));
-assert.ok(ID_RE.test("a".repeat(41)), "41 chars is the ceiling");
-assert.ok(!ID_RE.test("a".repeat(42)), "42 chars must fail, the old bound was 61");
+assert.ok(ID_RE.test("a".repeat(40)), "40 chars is the ceiling");
+assert.ok(!ID_RE.test("a".repeat(41)), "41 chars must fail, the old bound was 41 inclusive");
 assert.ok(!ID_RE.test("-leading-dash"));
 assert.ok(!ID_RE.test("Has-Caps"));
 assert.ok(!ID_RE.test("has spaces"));
@@ -230,7 +244,7 @@ assert.equal(validateListen(goodListen), null, "good listen payload must pass");
 assert.equal(validateListen({ built: "x", queue: [] }), null, "an empty queue is legal");
 assert.match(validateListen({ ...goodListen, built: 5 }), /built/);
 assert.match(validateListen({ ...goodListen, queue: "x" }), /queue/);
-assert.match(validateListen({ ...goodListen, queue: [ep({ id: "no" })] }), /id/);
+assert.match(validateListen({ ...goodListen, queue: [ep({ id: "NO" })] }), /id/);
 assert.match(validateListen({ ...goodListen, queue: [ep(), ep()] }), /duplicate/);
 assert.match(validateListen({ ...goodListen, queue: [ep({ tags: [1] })] }), /tags/);
 assert.match(validateListen({ ...goodListen, queue: [ep({ show: 5 })] }), /show/);
@@ -242,7 +256,7 @@ assert.match(
   validateListen({ ...goodListen, queue: Array.from({ length: 101 }, (_, i) => ep({ id: `ep-${i}` })) }),
   /queue/,
 );
-assert.match(validateListen({ ...goodListen, history: [{ id: "x", title: "y" }] }), /history\[0\]\.id/);
+assert.match(validateListen({ ...goodListen, history: [{ id: "X", title: "y" }] }), /history\[0\]\.id/);
 assert.match(validateListen({ ...goodListen, music: [{ label: "x", link: "spotify:uri" }] }), /music\[0\]\.link/);
 assert.match(validateListen({ ...goodListen, audiobook: { current: "", where: [], activities: [] } }), /current/);
 assert.match(
@@ -307,7 +321,22 @@ const goodFeedback = {
 assert.equal(validateFeedback(goodFeedback), null, "good feedback payload must pass");
 assert.match(validateFeedback({ ...goodFeedback, date: "" }), /date/);
 assert.match(validateFeedback({ ...goodFeedback, items: "x" }), /items/);
-assert.match(validateFeedback({ date: "2026-08-08", items: [{ qid: "ab" }] }), /qid/);
+assert.match(validateFeedback({ date: "2026-08-08", items: [{ qid: "BAD QID" }] }), /qid/);
+// a transcript the grader could not grade is a real state, not a broken payload
+assert.equal(
+  validateFeedback({
+    ...goodFeedback,
+    ran: "2026-08-08T07:10:00",
+    items: [{ ...goodFeedback.items[0], grade: null, ran: "2026-08-08T07:10:00" }],
+  }),
+  null,
+  "grade null and a ran stamp must both pass",
+);
+assert.match(validateFeedback({ ...goodFeedback, ran: 5 }), /ran/);
+assert.match(
+  validateFeedback({ date: "2026-08-08", items: [{ ...goodFeedback.items[0], grade: {} }] }),
+  /grade/,
+);
 assert.match(
   validateFeedback({ date: "2026-08-08", items: [{ ...goodFeedback.items[0], workshop: 3 }] }),
   /workshop/,

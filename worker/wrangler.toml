@@ -6,8 +6,18 @@ workers_dev = true
 # one live origin only, same policy as the mise worker
 preview_urls = false
 
-# Secret (set via `npx wrangler secret put`, NEVER here):
-#   BRIEF_KEY  - the one shared key; laptop and phone both present it.
+# Secrets (set via `npx wrangler secret put`, NEVER here). Two roles, and a
+# rotation set for each so a key can be swapped without a window of 401s:
+#   BRIEF_KEY   - the laptop key. Full access: pushes every payload, reads and
+#                 deletes /answer audio. This is the one that must never leave
+#                 the laptop.
+#   BRIEF_KEYS  - optional, comma separated. Every key in it is accepted as a
+#                 laptop key. Put the new one here, cut over, then drop the old.
+#   PHONE_KEY   - the phone key. GET on any payload route except /answer, plus
+#                 POST on ticks/capture/newsread/scan/answer. It can never push
+#                 a payload and never reads back the audio.
+#   PHONE_KEYS  - optional, comma separated rotation set for the phone key.
+# Both singular and plural are read, so the plural can stay unset day to day.
 
 [[kv_namespaces]]
 binding = "STORE"

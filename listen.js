@@ -81,11 +81,17 @@ function render(data, note, empty) {
   });
   root.appendChild(filters);
 
-  const passes = (it) => active.every((f) => {
-    if (f === "<1h") { const m = minutesOf(it); return m !== null && m < 60; }
-    if (f === "long") { const m = minutesOf(it); return m !== null && m >= 60; }
-    return (it.tags || []).indexOf(f) >= 0;
-  });
+  // Tags are alternatives (aero OR history), length is a constraint on top of
+  // them. Two tags ANDed together matched nothing, which read as a broken chip.
+  const isDur = (f) => f === "<1h" || f === "long";
+  const tagsOn = active.filter((f) => !isDur(f));
+  const durOn = active.filter(isDur);
+  const passes = (it) =>
+    (!tagsOn.length || tagsOn.some((f) => (it.tags || []).indexOf(f) >= 0)) &&
+    durOn.every((f) => {
+      const m = minutesOf(it);
+      return m !== null && (f === "<1h" ? m < 60 : m >= 60);
+    });
 
   const live = queue.filter((q) => !listened(q.id) && passes(q));
   const list = el("div", {});
@@ -109,14 +115,28 @@ function render(data, note, empty) {
     .map((q) => ({ id: q.id, title: q.title, date: (local[q.id] || {}).at || date }))
     .concat(data.history || []);
   const tape = el("details", { class: "tape" });
-  const sum = el("summary", {}, "history · " + past.length);
-  tape.appendChild(sum);
-  past.forEach((h) => {
-    const row = el("div", { class: "hrow" });
-    row.appendChild(el("span", { class: "d" }, md(String(h.date || h.at || "").slice(0, 10))));
-    row.appendChild(el("span", {}, md(h.title || h.id)));
-    tape.appendChild(row);
-  });
+  tape.appendChild(el("summary", {}, "history · " + past.length));
+  // the tape only grows, so finding "that Acquired one" needs a text box
+  const find = el("input", { class: "hfind", type: "search", placeholder: "filter the tape",
+    "aria-label": "Filter history" });
+  const rows = el("div", {});
+  const paintTape = () => {
+    const q = find.value.trim().toLowerCase();
+    rows.innerHTML = "";
+    past
+      .filter((h) => !q || String(h.title || h.id || "").toLowerCase().indexOf(q) >= 0)
+      .forEach((h) => {
+        const row = el("div", { class: "hrow" });
+        const when = String(h.date || h.at || "").slice(0, 10);
+        if (when) row.appendChild(el("span", { class: "d" }, md(when)));
+        row.appendChild(el("span", {}, md(h.title || h.id)));
+        rows.appendChild(row);
+      });
+  };
+  find.addEventListener("input", paintTape);
+  tape.appendChild(find);
+  tape.appendChild(rows);
+  paintTape();
   root.appendChild(tape);
 
   if (data.audiobook) root.appendChild(audiobookCard(data.audiobook, data.activities));

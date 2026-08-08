@@ -85,16 +85,20 @@ const QUOTE_TTL = 15 * 60 * 1000;
 const HIST_TTL = 24 * 60 * 60 * 1000;
 const INTRADAY_TTL = 15 * 60 * 1000;
 
+// nosniff on every body: nothing here is ever meant to be re-typed by a
+// browser, and the blob routes hand back bytes a phone uploaded.
+const NOSNIFF = "x-content-type-options";
+
 function json(status, body) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json", "cache-control": "no-store", ...CORS },
+    headers: { "content-type": "application/json", "cache-control": "no-store", [NOSNIFF]: "nosniff", ...CORS },
   });
 }
 
 function raw200(text) {
   return new Response(text, {
-    headers: { "content-type": "application/json", "cache-control": "no-store", ...CORS },
+    headers: { "content-type": "application/json", "cache-control": "no-store", [NOSNIFF]: "nosniff", ...CORS },
   });
 }
 
@@ -173,7 +177,7 @@ async function readBlob(request, cap, types) {
 
 function bytes200(buf, type) {
   return new Response(buf, {
-    headers: { "content-type": type, "cache-control": "no-store", ...CORS },
+    headers: { "content-type": type, "cache-control": "no-store", [NOSNIFF]: "nosniff", ...CORS },
   });
 }
 
@@ -437,6 +441,11 @@ export default {
       }
       const items = Array.isArray(cur.items) ? cur.items : [];
       if (items.length >= 200) return json(429, { error: "capture full for the day" });
+      // A retry after a dropped answer must not file the thought twice. The
+      // phone stamps `at` once per capture, so at+text is the identity.
+      const last = items[items.length - 1];
+      if (last && last.at === clip(body.at, 40) && last.text === clip(text, 2000))
+        return json(200, { ok: true, count: items.length, duplicate: true });
       items.push({
         text: clip(text, 2000),
         at: clip(body.at, 40) || new Date().toISOString(),

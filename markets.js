@@ -8,7 +8,7 @@
 
 import {
   root, api, el, md, blockMd, lsGet, lsSet, go, todayIso, fmtDay, fmtWeekday, fmtBuilt,
-  appFooter, emptyState, renderDays, isTab,
+  appFooter, emptyState, renderDays, isTab, pruneDated,
 } from "./core.js";
 
 const DOT = { HOLDING: "hold", WATCH: "watch", FIRED: "fired" };
@@ -24,6 +24,7 @@ function load(dateOrEmpty) {
     .then((data) => {
       lsSet(cacheKey, data);
       if (!qd) lsSet("crystal.markets." + data.date, data);
+      pruneDated();
       renderMarkets(data, qd, "");
     })
     .catch((e) => {
@@ -49,7 +50,7 @@ function renderMarkets(data, qd, note) {
 
   if (!data) {
     root.appendChild(emptyState("📈", qd ? "No digest for this day" : "No digest yet",
-      qd ? "Nothing was pushed on " + qd + ". Weekends and holidays have no edition."
+      qd ? "Nothing was pushed on " + md(qd) + ". Weekends and holidays have no edition."
          : "The evening edition lands after market close, once the digest pipeline pushes."));
     root.appendChild(appFooter(() => load(qd)));
     return;
@@ -74,9 +75,14 @@ function renderMarkets(data, qd, note) {
     let openSym = "";
     tickers.forEach((t) => {
       const move = typeof t.movePct === "number" ? t.movePct : (typeof t.move === "number" ? t.move : null);
-      const chip = el("button", { type: "button", class: "tkchip", "aria-expanded": "false" });
+      const dot = DOT[String(t.status || "").toUpperCase()] || "";
+      // a fired breaker is the one thing on this grid that must survive being
+      // glanced at, so the whole chip shifts, not just the dot
+      const chip = el("button", {
+        type: "button", class: "tkchip" + (dot === "fired" ? " fired" : ""), "aria-expanded": "false",
+      });
       const sym = el("span", { class: "sym" });
-      sym.appendChild(el("span", { class: "dot " + (DOT[String(t.status || "").toUpperCase()] || "") }));
+      sym.appendChild(el("span", { class: "dot " + dot }));
       sym.appendChild(el("span", {}, md(t.ticker)));
       chip.appendChild(sym);
       chip.appendChild(el("span", { class: "px" },

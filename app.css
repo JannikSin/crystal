@@ -152,8 +152,10 @@ footer.app button.danger{color:var(--down);border-color:color-mix(in srgb,var(--
   font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase}
 
 /* the checkbox control, shared by every tab that ticks something */
+/* 44x44 is the tap-target floor; the negative margins keep the 22px footprint
+   the rows were laid out around, so only the hit area grows */
 label.tk{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;
-  width:38px;height:38px;margin:-8px 0 -8px -8px;cursor:pointer;position:relative;
+  width:44px;height:44px;margin:-11px 0 -11px -11px;cursor:pointer;position:relative;
   -webkit-tap-highlight-color:transparent}
 label.tk input{position:absolute;opacity:0;width:100%;height:100%;margin:0}
 label.tk .box{width:23px;height:23px;border-radius:8px;border:1.5px solid var(--faint);
@@ -166,6 +168,7 @@ label.tk input:checked+.box{background:var(--tier,var(--accent));border-color:va
   animation:pop .3s cubic-bezier(.3,1.6,.5,1)}
 label.tk input:checked+.box svg{stroke-dashoffset:0;transition:stroke-dashoffset .22s ease .06s}
 label.tk input:focus-visible+.box{outline:2px solid var(--accent);outline-offset:2px}
+label.tk input:disabled+.box{opacity:.35}
 @keyframes pop{0%{transform:scale(.82)}55%{transform:scale(1.12)}100%{transform:scale(1)}}
 
 /* =========================================================================
@@ -413,6 +416,8 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
   padding:8px 9px 9px;text-align:left;cursor:pointer;color:var(--term-ink);
   font-family:var(--mono);display:block;width:100%}
 .tkchip[aria-expanded="true"]{border-color:var(--term-dim);background:#1e2431}
+/* a fired breaker reads at a glance, not only through a 7px dot */
+.tkchip.fired{border-color:var(--dot-fired);background:rgba(226,86,79,.11)}
 .tkchip .sym{font-size:.82rem;font-weight:600;letter-spacing:.08em;display:flex;
   align-items:center;gap:6px}
 .tkchip .px{font-size:.72rem;color:var(--term-dim);font-variant-numeric:tabular-nums;margin-top:3px}
@@ -611,7 +616,7 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
   padding:2px 9px;letter-spacing:.06em}
 .qrow h3{margin:5px 0 0;font-family:var(--serif);font-weight:600;font-size:1.06rem;line-height:1.28}
 .qrow .note{margin:3px 0 0;color:var(--dim);font-size:.85rem}
-.qrow .go{display:inline-block;margin-top:7px;font-family:var(--mono);font-size:.68rem;
+.qrow .go,.slip .act .go{display:inline-block;margin-top:7px;font-family:var(--mono);font-size:.68rem;
   letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink);text-decoration:none;
   border:1px solid var(--soft-edge);background:var(--soft);border-radius:99px;padding:5px 12px}
 .tape{margin-top:20px}
@@ -619,6 +624,8 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
   letter-spacing:.2em;text-transform:uppercase;color:var(--faint);display:flex;gap:8px;align-items:center}
 .tape>summary::-webkit-details-marker{display:none}
 .tape>summary::after{content:"";flex:1;height:1px;background:var(--edge)}
+.tape .hfind{width:100%;margin-top:10px;padding:9px 12px;border-radius:11px;
+  border:1px solid var(--edge);background:var(--soft);color:inherit;font:inherit;font-size:.86rem}
 .tape .hrow{display:flex;gap:10px;align-items:baseline;padding:8px 2px;
   border-bottom:1px solid var(--hairline);font-size:.88rem;color:var(--dim)}
 .tape .hrow .d{font-family:var(--mono);font-size:.66rem;color:var(--faint);flex:0 0 auto}

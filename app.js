@@ -17,7 +17,15 @@ function route() {
   if (!key()) { keyScreen(""); return; }
   tabbar.hidden = false;
   const h = location.hash.replace(/^#\/?/, "");
-  const parts = h.split("/").map(decodeURIComponent).filter(Boolean);
+  // a hand-mangled hash (a lone %) throws in decodeURIComponent; that is a bad
+  // link, not a broken app, so it lands on Today instead of a white screen
+  let parts;
+  try {
+    parts = h.split("/").map(decodeURIComponent).filter(Boolean);
+  } catch (e) {
+    go("#/today");
+    return;
+  }
   const tab = ROUTES[parts[0]] ? parts[0] : "today";
   tabbar.querySelectorAll("button").forEach((b) => {
     b.setAttribute("aria-current", b.getAttribute("data-tab") === tab ? "true" : "false");
@@ -42,10 +50,12 @@ flushUploads();
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js");
   // A new SW taking over means the shell on screen is the old one. Reload once,
-  // guarded, so a refresh loop can never happen.
+  // guarded, so a refresh loop can never happen. On the FIRST install there was
+  // no controller, so nothing on screen is stale and the reload is pure churn.
+  const hadController = !!navigator.serviceWorker.controller;
   let reloaded = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (reloaded) return;
+    if (reloaded || !hadController) return;
     reloaded = true;
     location.reload();
   });

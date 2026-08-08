@@ -7,8 +7,8 @@
 // surface: detail is one tap away, on the items that have any.
 
 import {
-  root, api, el, md, blockMd, lsGet, lsSet, lsDel, isoOf, todayIso, shiftIso, fmtBuilt,
-  appFooter, renderDays, HISTORY_DAYS, WORKER, key, isTab,
+  root, api, el, md, blockMd, lsGet, lsSet, todayIso, shiftIso, fmtBuilt,
+  appFooter, renderDays, pruneDated, WORKER, key, isTab,
 } from "./core.js";
 import {
   localTicks, isDone, setTick, tickControl, queueCapture, flush,
@@ -18,6 +18,9 @@ import { computeReward } from "./reward.js";
 
 // M3: the one slot table. Array order inside a slot is authoritative; the
 // client never sorts. Hours 00:00-05:00 sit at the foot of night.
+// Two siblings must agree with this table or an item lands in the wrong band:
+// SLOTS in worker/src/validate.js (which names are legal) and SLUG_SLOT in
+// crystal-assistant/push_brief.py (which item goes where). Change all three.
 const SLOTS = [
   { t: "dawn", from: 5, to: 8 },
   { t: "morning", from: 8, to: 12 },
@@ -40,13 +43,7 @@ export function open() { loadToday(false); }
 function cacheBrief(data) {
   if (!data || !data.date) return;
   lsSet("brief.day." + data.date, data);
-  const cut = new Date();
-  cut.setDate(cut.getDate() - (HISTORY_DAYS + 1));
-  const cutIso = isoOf(cut);
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const k = localStorage.key(i);
-    if (k && k.indexOf("brief.day.") === 0 && k.slice(10) < cutIso) lsDel(k);
-  }
+  pruneDated();
 }
 
 function loadToday(force) {
@@ -93,7 +90,10 @@ function pullFeedback() {
   if (feedbackAsked === stamp) return;
   feedbackAsked = stamp;
   Promise.all([todayIso(), shiftIso(-1)].map((d) =>
-    api("/feedback?date=" + d).then((r) => (r.items || []).map((i) => Object.assign({ date: d }, i))).catch(() => [])
+    api("/feedback?date=" + d)
+      // ran is the transcriber's own stamp: when the grader last actually ran
+      .then((r) => (r.items || []).map((i) => Object.assign({ date: d, ran: r.ran }, i)))
+      .catch(() => [])
   )).then((lists) => {
     const items = lists[0].concat(lists[1]);
     if (!items.length) return;
@@ -108,6 +108,9 @@ function render(offlineNote, emptyDayNote) {
   root.innerHTML = "";
   rewardBox = null;
   const isToday = !viewDate && !!brief && brief.date === todayIso();
+  // RL3: the latest brief can be yesterday's if the morning build has not run.
+  // It still renders, but its ticks belong to today, never backdated onto it.
+  const stale = !viewDate && !!brief && brief.date !== todayIso();
 
   root.appendChild(header());
 
@@ -121,9 +124,10 @@ function render(offlineNote, emptyDayNote) {
     back.addEventListener("click", () => pickDay(""));
     b.appendChild(back);
     root.appendChild(b);
-  } else if (brief && !viewDate && brief.date !== todayIso()) {
+  } else if (stale) {
     root.appendChild(el("div", { class: "banner" },
-      "This brief is from " + md(brief.day) + ", not today. Open with signal to refresh."));
+      "This brief is from " + md(brief.day) + ", not today. Anything you tick counts for today. " +
+      "Open with signal to refresh."));
   }
 
   if (!brief) {
@@ -141,14 +145,25 @@ function render(offlineNote, emptyDayNote) {
     root.appendChild(legacyBoard());
     root.appendChild(renderCapture());
     root.appendChild(appFooter(() => pickDay(viewDate, true)));
+    paintMeter();
     flush();
     return;
   }
 
-  const date = brief.date;
+  const date = stale ? todayIso() : brief.date;
   const local = localTicks(date);
   doneMap = {};
   (brief.timeline || []).forEach((it) => { doneMap[it.id] = isDone(it, local, brief.built); });
+
+  // A granted fun day is the whole point of the ledger. Nothing is owed, so
+  // nothing is drawn: no timeline, no cards, no reward strip nagging about it.
+  if (isToday && brief.reward && brief.reward.funDay === todayIso()) {
+    root.appendChild(el("p", { class: "empty" }, "Today is yours. Nothing renders."));
+    root.appendChild(renderCapture());
+    root.appendChild(appFooter(() => pickDay(viewDate, true)));
+    flush();
+    return;
+  }
 
   // M5: the reward layer only ever speaks about today
   if (isToday) {
@@ -203,7 +218,7 @@ function latchKey() { return "crystal.reveal." + (brief ? brief.date : todayIso(
 function paintReward() {
   if (!rewardBox || !brief) return;
   const latch = lsGet(latchKey(), { daily: false, full: false });
-  const r = computeReward(brief, doneMap, latch, swapIdx);
+  const r = computeReward(brief, doneMap, latch, swapIdx, new Date());
   if (r.latch.daily !== latch.daily || r.latch.full !== latch.full) lsSet(latchKey(), r.latch);
   rewardBox.innerHTML = "";
   r.lines.forEach((l) => rewardBox.appendChild(el("div", { class: "line" + (l.dim ? " dim" : "") }, md(l.text))));
@@ -273,12 +288,19 @@ function row(date, it) {
     label: it.ticklabel || it.label,
     target: it.target || "",
   };
-  r.appendChild(tickControl(date, it.id, doneMap[it.id], extra, (on) => {
+  const ctl = tickControl(date, it.id, doneMap[it.id], extra, (on) => {
     doneMap[it.id] = on;
     r.classList.toggle("done", on);
     paintMeter();
     paintReward();
-  }));
+  });
+  // RL16: reading an old day is fine, claiming an evening on it is not. The
+  // fun ledger only moves forward.
+  if (it.kind === "fun" && viewDate && viewDate !== todayIso()) {
+    ctl.querySelector("input").disabled = true;
+    ctl.title = "Not back-fillable. The ledger only moves forward.";
+  }
+  r.appendChild(ctl);
 
   const hasDetail = !!it.detail || it.kind === "answer" || isScanItem(it);
   const lab = el("button", { type: "button", class: "tl-lab", "data-more": hasDetail ? "1" : "0" },
@@ -303,6 +325,10 @@ function row(date, it) {
 
 // ---------- the recorder ----------
 // start/stop only. No pause: WebKit's paused MediaRecorder records silence.
+// A rep is one answer, not a lecture: five minutes is the hard stop, and the
+// Worker refuses /answer over 6MB, so anything near that never leaves here.
+const MAX_REC_MS = 5 * 60 * 1000;
+const MAX_REC_BYTES = 5.5 * 1024 * 1024;
 function pickMime() {
   const want = ["audio/mp4", "audio/webm"];
   if (!window.MediaRecorder) return null;
@@ -333,7 +359,12 @@ function recorder(det, it) {
   if (!qid) { btn.disabled = true; note.textContent = "No question id on this item, so nothing to file a recording against."; return; }
   if (mime === null) { btn.disabled = true; note.textContent = "This browser cannot record audio. Speak it out loud anyway."; return; }
 
-  let rec = null, chunks = [], t0 = 0, tick = 0;
+  let rec = null, chunks = [], t0 = 0, tick = 0, cap = 0;
+  // leaving the app kills the recorder on iOS anyway; stopping it deliberately
+  // keeps the seconds already chunked instead of losing the take
+  const bail = () => {
+    if (document.visibilityState !== "visible" && rec && rec.state === "recording") rec.stop();
+  };
   btn.addEventListener("click", async () => {
     if (rec && rec.state === "recording") { rec.stop(); return; }
     try {
@@ -343,24 +374,42 @@ function recorder(det, it) {
       rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
       rec.onstop = async () => {
         clearInterval(tick);
+        clearTimeout(cap);
+        document.removeEventListener("visibilitychange", bail);
+        dropWakeForRec();
         stream.getTracks().forEach((t) => t.stop());
         btn.textContent = "Record";
         btn.setAttribute("data-on", "0");
         const durationMs = Date.now() - t0;
         const blob = new Blob(chunks, { type: (chunks[0] && chunks[0].type) || mime || "audio/mp4" });
+        // refused here, where it can be redone, instead of dying as a 413 later
+        if (blob.size > MAX_REC_BYTES) {
+          note.textContent = "That is too long to send. Redo it shorter, two minutes is plenty.";
+          return;
+        }
         const level = await rmsOf(blob);
+        // the note only promises a save once the store has actually taken it
+        try {
+          await uploadEnqueue({ kind: "answer", date: brief.date, qid, durationMs, blob });
+        } catch (e) {
+          note.textContent = "This phone would not store that recording. Say it again.";
+          return;
+        }
+        lsSet("crystal.recorded", (lsGet("crystal.recorded", 0) || 0) + 1);
         note.textContent = level !== null && level < 0.01
           ? "Saved, but the audio looks silent. Check the mic and do it again."
           : "Saved on the phone. It goes up on the next signal.";
-        lsSet("crystal.recorded", (lsGet("crystal.recorded", 0) || 0) + 1);
-        await uploadEnqueue({ kind: "answer", date: brief.date, qid, durationMs, blob });
         paintLive(live);
       };
-      rec.start();
+      // a timeslice means a chunk lands every 5s, so a killed tab costs seconds
+      rec.start(5000);
       t0 = Date.now();
+      cap = setTimeout(() => { if (rec && rec.state === "recording") rec.stop(); }, MAX_REC_MS);
+      document.addEventListener("visibilitychange", bail);
+      holdWakeForRec();
       btn.textContent = "Stop";
       btn.setAttribute("data-on", "1");
-      note.textContent = "Recording. Do not send the app to the background.";
+      note.textContent = "Recording. Leave the app and it stops and keeps what it has. Five minutes max.";
       tick = setInterval(() => {
         const s = Math.floor((Date.now() - t0) / 1000);
         timer.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
@@ -396,25 +445,26 @@ function paintLive(live) {
   uploadStats().then((s) => {
     const bits = [rec + " recorded", feedback.length + " graded"];
     if (s.pending) bits.push(s.pending + " waiting to send");
-    if (s.dead) bits.push(s.dead + " not sent");
+    // a dead upload names its reason: a silent count teaches nothing
+    if (s.dead) bits.push(s.dead + " not sent" + (s.why ? ", " + s.why : ""));
+    const ran = (feedback.find((f) => f.ran) || {}).ran;
+    if (ran) bits.push("graded last " + String(ran).slice(0, 16).replace("T", " "));
     live.textContent = bits.join(", ") + ".";
   });
 }
 
+// One card, for THIS question. Every grade in the payload used to be pasted
+// under every recorder on the board.
 function gradedFor(qid, it) {
-  const out = [];
-  feedback.forEach((f) => {
+  return feedback.filter((f) => f.qid === qid).map((f) => {
     const c = el("div", { class: "graded" });
     c.appendChild(el("div", { class: "g" }, "graded · " + md(f.date || "") + " · " + md(f.qid || "")));
-    if (f.qid === qid && it.detail) {
-      c.appendChild(el("p", {}, md(String(it.detail).split("\n")[0])));
-    }
+    if (it.detail) c.appendChild(el("p", {}, md(String(it.detail).split("\n")[0])));
     if (f.transcriptExcerpt) c.appendChild(el("blockquote", {}, md(f.transcriptExcerpt)));
-    if (f.grade !== undefined) c.appendChild(el("p", {}, md("Grade: " + f.grade)));
+    if (f.grade !== undefined && f.grade !== null) c.appendChild(el("p", {}, md("Grade: " + f.grade)));
     if (f.workshop) blockMd(c, f.workshop);
-    out.push(c);
+    return c;
   });
-  return out;
 }
 
 // ---------- the scan ----------
@@ -542,24 +592,57 @@ function wakeButton() {
 function paintWake() {
   document.querySelectorAll(".wake").forEach((b) => {
     b.setAttribute("data-state", wakeState);
-    b.title = wakeState === "na" ? "Screen lock is unavailable on this iOS version" : "Keep the screen awake";
+    b.title = wakeState === "na"
+      ? "This browser refused to keep the screen awake"
+      : "Keep the screen awake";
   });
 }
 
-async function acquireWake() {
+// A rejection is two different facts wearing one error. No API at all, or an
+// old iOS that never grants it, is "na" and the button should say so. A
+// rejection while the page is not the active document is transient, worth one
+// retry, and must not brand the feature dead for the rest of the session.
+async function acquireWake(retried) {
   if (!navigator.wakeLock) { wakeState = "na"; return; }
   try {
     sentinel = await navigator.wakeLock.request("screen");
     wakeState = "on";
-    sentinel.addEventListener("release", () => { sentinel = null; wakeState = wantWake ? "off" : "off"; paintWake(); });
+    sentinel.addEventListener("release", () => { sentinel = null; wakeState = "off"; paintWake(); });
   } catch (e) {
     sentinel = null;
+    if (document.visibilityState !== "visible") { wakeState = "off"; return; }
+    if (!retried) { await acquireWake(true); return; }
     wakeState = "na";
   }
 }
 
+// RL15: the screen going dark is the commonest way a recording dies. Held for
+// the length of the take, and only released if the recorder is what took it.
+let recHeldWake = false;
+
+async function holdWakeForRec() {
+  if (sentinel) return; // the toggle already holds one, leave it alone
+  wantWake = true;
+  await acquireWake();
+  recHeldWake = !!sentinel;
+  paintWake();
+}
+
+async function dropWakeForRec() {
+  if (!recHeldWake) return;
+  recHeldWake = false;
+  wantWake = false;
+  if (sentinel) { try { await sentinel.release(); } catch (e) {} sentinel = null; }
+  wakeState = "off";
+  paintWake();
+}
+
 document.addEventListener("visibilitychange", () => {
-  if (wantWake && !sentinel && document.visibilityState === "visible") acquireWake().then(paintWake);
+  if (document.visibilityState !== "visible") return;
+  if (wantWake && !sentinel) acquireWake().then(paintWake);
+  // RL9: the phone was in a pocket over midnight. The board on screen is
+  // yesterday's, so go get today's before he ticks anything against it.
+  if (isTab("today") && !viewDate && brief && brief.date !== todayIso()) loadToday(true);
 });
 
 // ---------- scoreboard, cards, capture ----------
@@ -581,13 +664,12 @@ const foldKey = (title) => String(title).replace(/\(.*$/, "").trim();
 // v2 cards are {title, md}; v1 cards are {title, blocks[], tick}. One renderer
 // handles both, because cached history days still arrive in the old shape.
 function renderCards(into, cards, date, local) {
-  const folds = lsGet("brief.fold", {});
   cards.forEach((card) => {
     const fk = foldKey(card.title);
     const d = el("details", { class: "card" });
-    // v2: collapsed by default, they are reference not surface. v1 keeps its
-    // remembered fold state.
-    if (card.blocks && !folds[fk]) d.setAttribute("open", "");
+    // Every card is collapsed on arrival, v1 and v2 alike: they are reference,
+    // not surface, and a wall of open v1 cards buried the timeline. The
+    // remembered fold state still applies once he opens one.
     d.addEventListener("toggle", () => {
       const f = lsGet("brief.fold", {});
       if (d.open) delete f[fk]; else f[fk] = true;
@@ -600,7 +682,7 @@ function renderCards(into, cards, date, local) {
     const body = el("div", { class: "cardbody" });
 
     if (card.tick) {
-      const checked = card.tick.checked || !!(local[card.tick.id] || {}).done;
+      const checked = isDone({ id: card.tick.id, state: card.tick.checked }, local, brief.built);
       body.appendChild(legacyTick(date, card.tick.id, md(card.tick.label), checked, {
         kind: card.kind || "action", section: card.title,
         label: card.tick.label, target: card.tick.target || "",
@@ -616,7 +698,7 @@ function renderCards(into, cards, date, local) {
       }
       ul = null;
       if (b.t === "tick") {
-        const checked = b.checked || !!(local[b.id] || {}).done;
+        const checked = isDone({ id: b.id, state: b.checked }, local, brief.built);
         body.appendChild(legacyTick(date, b.id, md(b.md), checked, {
           kind: "task", section: card.title, label: String(b.md).slice(0, 120),
         }));
@@ -637,6 +719,9 @@ function legacyTick(date, id, textHtml, checked, extra, cls) {
   box.addEventListener("change", () => {
     setTick(date, id, box.checked, extra);
     lab.classList.toggle("done", box.checked);
+    // only ids the meter is already counting, so a v2 card tick never inflates
+    // the timeline total
+    if (id in doneMap) { doneMap[id] = box.checked; paintMeter(); }
   });
   lab.appendChild(box);
   lab.appendChild(el("span", { class: "box" },
@@ -645,9 +730,18 @@ function legacyTick(date, id, textHtml, checked, extra, cls) {
   return lab;
 }
 
+// The old board has no timeline, so its ticks ARE the day: the meter counts
+// them, merged by the same rule the timeline uses.
 function legacyBoard() {
   const app = el("div", { id: "app" });
-  renderCards(app, brief.cards || [], brief.date, localTicks(brief.date));
+  const local = localTicks(brief.date);
+  (brief.cards || []).forEach((c) => {
+    if (c.tick) doneMap[c.tick.id] = isDone({ id: c.tick.id, state: c.tick.checked }, local, brief.built);
+    (c.blocks || []).forEach((b) => {
+      if (b.t === "tick") doneMap[b.id] = isDone({ id: b.id, state: b.checked }, local, brief.built);
+    });
+  });
+  renderCards(app, brief.cards || [], brief.date, local);
   return app;
 }
 

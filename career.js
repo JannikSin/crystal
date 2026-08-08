@@ -48,7 +48,7 @@ function render(data, note, empty) {
   if (data.spotlight) root.appendChild(spotCard(data.spotlight));
   if (Array.isArray(data.roster) && data.roster.length) root.appendChild(rolodex(data.roster, data.spotlight));
   if (data.outreach) root.appendChild(outreachSlip(data.outreach));
-  if (data.signals) root.appendChild(signalsBlock(data.signals, data.aeroDated));
+  if (data.signals) root.appendChild(signalsBlock(data.signals));
 
   root.appendChild(appFooter(() => loadCached("/career", "crystal.career", render, true)));
 }
@@ -106,6 +106,17 @@ function rolodex(roster, spotlight) {
   return wrap;
 }
 
+// A contact the vault already knows: one tap opens the message instead of
+// sending him hunting for the number. Only these three schemes are ever built,
+// so a crafted "contact" cannot become a javascript: link.
+function contactHref(c) {
+  const v = String(c || "").trim();
+  if (/^https:\/\/[^\s"'<>`]+$/.test(v)) return v;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "mailto:" + v;
+  if (/^\+?[\d\-(). ]{7,20}$/.test(v)) return "sms:" + v.replace(/[^\d+]/g, "");
+  return "";
+}
+
 // the one tickable thing on this tab. Same pipe as every other tick, so the
 // vault retires the name on the next pull.
 function outreachSlip(o) {
@@ -128,11 +139,16 @@ function outreachSlip(o) {
   if (typeof o.contacted === "number" && o.contacted > 0) {
     act.appendChild(el("span", { class: "badge" }, o.contacted + " contacted"));
   }
+  const href = contactHref(o.contact);
+  if (href) {
+    act.appendChild(el("a", { class: "go", href, target: "_blank", rel: "noopener" },
+      href.indexOf("sms:") === 0 ? "text ↗" : href.indexOf("mailto:") === 0 ? "email ↗" : "open ↗"));
+  }
   slip.appendChild(act);
   return slip;
 }
 
-function signalsBlock(s, aeroDated) {
+function signalsBlock(s) {
   const box = el("section", { class: "signals" });
   box.appendChild(el("div", { class: "sh" },
     "aerospace signals" + (s.date ? " · " + md(s.date) : "") + (s.suffix ? " " + md(s.suffix) : "")));
@@ -141,6 +157,7 @@ function signalsBlock(s, aeroDated) {
     blockMd(item, t);
     box.appendChild(item);
   });
-  if (aeroDated) box.appendChild(el("p", { class: "moneyfoot" }, md(aeroDated)));
+  // the sweep's own caveat about how old the reading is
+  if (s.note) box.appendChild(el("p", { class: "moneyfoot" }, md(s.note)));
   return box;
 }

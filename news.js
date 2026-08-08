@@ -26,7 +26,9 @@ function catKey(cat) {
   if (/sport/.test(c)) return "sports";
   return c;
 }
-const catLabel = (cat) => CAT_LABEL[catKey(cat)] || String(cat);
+// the fallback is payload text landing in innerHTML, so it escapes like
+// everything else the Worker returns
+const catLabel = (cat) => CAT_LABEL[catKey(cat)] || md(String(cat));
 
 const NEWS_CAP = 20;
 
@@ -182,6 +184,7 @@ function openStory(id) {
 }
 
 function renderStory(s) {
+  if (!isTab("news")) return;
   root.innerHTML = "";
   const back = el("button", { type: "button", class: "backbtn" }, "← the dispatch");
   back.addEventListener("click", () => go("#/news"));

@@ -16,11 +16,53 @@ export function lsGet(k, fallback) {
     return fallback;
   }
 }
+// Returns false when the write did not land (a full quota on iOS throws here),
+// so a caller that promised the user something is saved can say otherwise.
 export function lsSet(k, v) {
-  try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {}
+  try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; }
 }
 export function lsDel(k) {
   try { localStorage.removeItem(k); } catch (e) {}
+}
+
+// Dated caches, keyed <prefix><YYYY-MM-DD>. Nothing older than the day
+// switchers can reach is reachable, so it is only quota being burned.
+const DATED = ["brief.day.", "brief.ticks.", "brief.caps.", "crystal.read.",
+  "crystal.reveal.", "crystal.newsbatch.", "crystal.markets."];
+
+export function pruneDated() {
+  const cut = new Date();
+  cut.setDate(cut.getDate() - (HISTORY_DAYS + 1));
+  const cutIso = isoOf(cut);
+  const oldest = Date.now() - (HISTORY_DAYS + 1) * 86400000;
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      const p = DATED.find((x) => k.indexOf(x) === 0);
+      if (p) { if (k.slice(p.length) < cutIso) lsDel(k); continue; }
+      // the quote-history cache is stamped, not dated
+      if (k.indexOf("crystal.qh.") === 0) {
+        const at = (lsGet(k, null) || {}).at;
+        if (typeof at !== "number" || at < oldest) lsDel(k);
+      }
+    }
+  } catch (e) {}
+}
+
+// Every cached server payload, and nothing the user is still owed: the queue,
+// the local tick state and the upload store all survive. Used when the key
+// changes, because a payload fetched with the old key is not this key's data.
+const PAYLOADS = ["brief.last", "brief.day.", "crystal.news.last", "crystal.markets.",
+  "crystal.career", "crystal.listen", "crystal.holdings", "crystal.quotes", "crystal.qh."];
+
+export function clearPayloads() {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && PAYLOADS.some((p) => k.indexOf(p) === 0)) lsDel(k);
+    }
+  } catch (e) {}
 }
 // One key, one name. The old brief.key fallback is gone with the /brief app.
 export function key() { return localStorage.getItem("crystal.key") || ""; }
@@ -81,9 +123,14 @@ export function shiftIso(days) {
   d.setDate(d.getDate() + days);
   return isoOf(d);
 }
+// Carries the offset, so a stamp made in Antibes still compares correctly
+// against one made in West Lafayette.
 export function nowIso() {
   const d = new Date();
-  return isoOf(d) + "T" + p2(d.getHours()) + ":" + p2(d.getMinutes()) + ":" + p2(d.getSeconds());
+  const off = -d.getTimezoneOffset();
+  const a = Math.abs(off);
+  return isoOf(d) + "T" + p2(d.getHours()) + ":" + p2(d.getMinutes()) + ":" + p2(d.getSeconds()) +
+    (off < 0 ? "-" : "+") + p2(Math.floor(a / 60)) + ":" + p2(a % 60);
 }
 export function fmtBuilt(iso) {
   const d = new Date(iso);
@@ -186,7 +233,8 @@ export function appFooter(refreshFn) {
   const re = el("button", { type: "button" }, "Refresh");
   re.addEventListener("click", refreshFn);
   const ck = el("button", { type: "button" }, "Change key");
-  ck.addEventListener("click", () => keyScreen(""));
+  // a payload fetched with the old key must not survive into the new one
+  ck.addEventListener("click", () => { clearPayloads(); keyScreen(""); });
   const fg = el("button", { type: "button", class: "danger" }, "Forget this phone");
   fg.addEventListener("click", () => {
     if (confirm("Wipe the key, every cached payload and every pending recording from this phone?")) forgetPhone();

@@ -4,7 +4,9 @@
 // last-known copies in localStorage.
 // Cache name must stay crystal-prefixed: the PWAs share the janniksin.github.io
 // origin and each SW deletes only its own prefix.
-const CACHE = "crystal-v4";
+// v5: the caching rules themselves changed (ok + basic only), so the old cache
+// is dropped rather than trusted.
+const CACHE = "crystal-v5";
 
 const PRECACHE = [
   "./",
@@ -26,8 +28,16 @@ const PRECACHE = [
   "./icons/apple-touch-icon.png",
 ];
 
+// addAll is all-or-nothing: one 404 in the list and NOTHING is cached, which on
+// a phone with no signal is a white screen. Cache them one at a time, tolerate
+// the misses, and activate either way; the fetch handler fills any gap later.
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches
+      .open(CACHE)
+      .then((c) => Promise.all(PRECACHE.map((u) => c.add(u).catch(() => {}))))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener("activate", (e) => {
@@ -39,38 +49,44 @@ self.addEventListener("activate", (e) => {
   );
 });
 
+// Only a real same-origin 200 is worth keeping. An opaque, redirected or 404
+// response cached here would be served back as the shell forever.
+const keep = (res) => !!res && res.ok && res.type === "basic";
+
+function netThenCache(request) {
+  return fetch(request).then((res) => {
+    if (keep(res)) {
+      const copy = res.clone();
+      caches.open(CACHE).then((c) => c.put(request, copy));
+    }
+    return res;
+  });
+}
+
+function cacheFallback(request) {
+  return caches.match(request).then((hit) => {
+    if (hit) return hit;
+    if (request.mode === "navigate") return caches.match("./index.html").then((s) => s || Response.error());
+    return Response.error();
+  });
+}
+
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
 
   if (url.pathname.includes("/icons/")) {
-    e.respondWith(
-      caches.match(e.request).then(
-        (hit) =>
-          hit ||
-          fetch(e.request).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(e.request, copy));
-            return res;
-          }),
-      ),
-    );
+    e.respondWith(caches.match(e.request).then((hit) => hit || netThenCache(e.request)));
     return;
   }
 
+  // Network first, but one bar of signal must not hold the shell hostage: at
+  // 1.5s the cached copy wins the race and the fetch still fills the cache.
+  const net = netThenCache(e.request).catch(() => null);
+  const slow = new Promise((r) => setTimeout(r, 1500)).then(() => caches.match(e.request));
   e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy));
-        return res;
-      })
-      .catch(() =>
-        caches.match(e.request).then((hit) => {
-          if (hit) return hit;
-          if (e.request.mode === "navigate") return caches.match("./index.html");
-          return Response.error();
-        }),
-      ),
+    Promise.race([net, slow])
+      .then((res) => res || net)
+      .then((res) => res || cacheFallback(e.request)),
   );
 });

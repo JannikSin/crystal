@@ -16,7 +16,7 @@ export const localTicks = (date) => lsGet(ticksKey(date), {});
 // M2: an untick writes {done:false, at} instead of deleting the key, so a
 // deliberate untick is not silently undone by an older payload state. Local
 // wins only when it is NEWER than the build that produced the payload.
-function newer(a, b) {
+export function newer(a, b) {
   const ta = Date.parse(a), tb = Date.parse(b);
   if (isFinite(ta) && isFinite(tb)) return ta > tb;
   return String(a) > String(b); // both are YYYY-MM-DDTHH:MM:SS prefixed
@@ -36,13 +36,18 @@ export function setTick(date, id, done, extra) {
   const t = localTicks(date);
   const at = nowIso();
   t[id] = Object.assign({ done: !!done, at }, extra || {});
-  lsSet(ticksKey(date), t);
+  const stored = lsSet(ticksKey(date), t);
   let q = lsGet("brief.queue", []);
-  // replace any queued delta for the same box; only the last state matters
-  q = q.filter((d) => d.type !== "tick" || !(d.date === date && d.id === id));
+  // Replace any queued delta for the same box; only the last state matters.
+  // Index 0 is exempt while a flush is in flight: that one is already on the
+  // wire and the pump will shift it by position when the answer lands.
+  q = q.filter((d, i) => (i === 0 && flushing) ||
+    d.type !== "tick" || !(d.date === date && d.id === id));
   q.push(Object.assign({ type: "tick", date, id, done: !!done, at }, extra || {}));
-  lsSet("brief.queue", q);
+  const queued = lsSet("brief.queue", q);
   flush();
+  // storage refused the write, so the box on screen is the only record of it
+  if (!stored || !queued) syncStamp("not saved on this phone");
 }
 
 export function queueCapture(text) {
@@ -164,12 +169,20 @@ export function uploadsAll() {
 const uploadPut = (rec) => tx("readwrite", (s) => s.put(rec));
 const uploadDel = (id) => tx("readwrite", (s) => s.delete(id));
 
-// "2 waiting, 1 not sent" for the liveness line.
+// "2 waiting, 1 not sent, too long" for the liveness line. A dead row keeps its
+// status so the reason is nameable instead of a silent count.
+const deadWhy = (r) =>
+  r.status === 413 ? "too long" : r.status === 415 ? "wrong format" : "the Worker refused it";
+
 export function uploadStats() {
-  return uploadsAll().then((all) => ({
-    pending: all.filter((r) => !r.dead).length,
-    dead: all.filter((r) => r.dead).length,
-  }));
+  return uploadsAll().then((all) => {
+    const dead = all.filter((r) => r.dead);
+    return {
+      pending: all.filter((r) => !r.dead).length,
+      dead: dead.length,
+      why: dead.length ? deadWhy(dead[0]) : "",
+    };
+  });
 }
 
 let pumping = false;
@@ -201,9 +214,11 @@ export function flushUploads() {
       if (r.ok) { await uploadDel(rec.id); continue; }
       if (r.status >= 400 && r.status < 500 && r.status !== 401) {
         // the Worker refused these bytes; never retry, but keep the record so
-        // the liveness line can say "1 not sent" instead of going quiet
+        // the liveness line can say "1 not sent" instead of going quiet. The
+        // blob goes: it will never be sent, and it is the only big thing here.
         rec.dead = true;
         rec.status = r.status;
+        delete rec.blob;
         await uploadPut(rec);
         continue;
       }
@@ -216,7 +231,9 @@ export function flushUploads() {
 }
 
 window.addEventListener("online", () => { nextTry = 0; flush(); });
-window.addEventListener("focus", () => flushUploads());
+// coming back to the app is the most likely moment signal returned, so both
+// pipes get a shove, not just the blobs
+window.addEventListener("focus", () => { flush(); flushUploads(); });
 
 // ---------- the checkbox control ----------
 // One control, six tabs. The caller owns the row around it; this owns the

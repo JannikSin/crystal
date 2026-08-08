@@ -5,11 +5,17 @@
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const TICKER_RE = /^[A-Z][A-Z0-9.\-]{0,9}$/;
 // hash ids (10 hex) or stable slugs (sleep-lights-out). One bound, shared by
-// the Worker, pull_ticks and the client slugifier: 3 to 41 chars, lowercase.
-export const ID_RE = /^[a-z0-9][a-z0-9-]{2,40}$/;
+// the Worker, pull_ticks and the client slugifier: 1 to 40 chars, lowercase.
+// The floor is 1 because a question id is legitimately "q1".
+export const ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 // the only base64 that still rides inside a payload: the brief's scan thumbnail
 export const IMG_DATAURL_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
 const STORY_ID_RE = /^[a-z0-9][a-z0-9-]{1,60}$/;
+// The closed set of categories. The long labels are what news_compile.py
+// writes; the short keys are what news.js normalises them to. Anything else
+// falls through the app's CAT_LABEL table and renders as raw payload text.
+const NEWS_CATS = ["AI/Tech", "Aerospace/Defense", "World/Politics", "Energy/Nuclear",
+  "Sports-discovery", "ai", "aero", "world", "energy", "sports"];
 
 const isStr = (v) => typeof v === "string";
 const isNum = (v) => typeof v === "number" && isFinite(v);
@@ -38,7 +44,7 @@ export function validateNews(p) {
     if (!STORY_ID_RE.test(s.id || "")) return `${at}.id must match ${STORY_ID_RE}`;
     if (seen.has(s.id)) return `${at}.id "${s.id}" is a duplicate`;
     seen.add(s.id);
-    if (!isStr(s.cat) || !s.cat) return `${at}.cat required (ai|aero|world|energy|sports)`;
+    if (!NEWS_CATS.includes(s.cat)) return `${at}.cat must be one of ${NEWS_CATS.join("|")}`;
     if (!isNum(s.rank)) return `${at}.rank must be a number`;
     if (!isStr(s.headline) || !s.headline.trim()) return `${at}.headline required`;
     if (!isStr(s.oneLiner) || !s.oneLiner.trim()) return `${at}.oneLiner required`;
@@ -76,11 +82,20 @@ export function validateNews(p) {
 }
 
 // ---------- markets ----------
-// {date, built, sections:[{id, title, md}]}
+// {date, built, sections:[{id, title, md}], tickers?:[{ticker, status, close,
+//  movePct, md}]}
 export function validateMarkets(p) {
   if (!p || typeof p !== "object") return "payload must be a JSON object";
   if (!DATE_RE.test(p.date || "")) return "date must be YYYY-MM-DD";
   if (!isStr(p.built)) return "built (ISO timestamp string) required";
+  if (p.tickers !== undefined) {
+    if (!isArr(p.tickers)) return "tickers must be an array";
+    for (let i = 0; i < p.tickers.length; i++) {
+      const t = p.tickers[i];
+      if (!t || typeof t !== "object") return `tickers[${i}] must be an object`;
+      if (!TICKER_RE.test(t.ticker || "")) return `tickers[${i}].ticker must match ${TICKER_RE}`;
+    }
+  }
   if (!isArr(p.sections) || !p.sections.length) return "sections must be a non-empty array";
   for (let i = 0; i < p.sections.length; i++) {
     const s = p.sections[i];
@@ -332,10 +347,15 @@ export function validateCareer(p) {
 }
 
 // ---------- feedback ----------
-// {date, items:[{qid, transcriptExcerpt, grade, workshop, bestAnswerRef?}]}
+// {date, ran?, items:[{qid, transcriptExcerpt, grade, workshop, bestAnswerRef?,
+//  ran?}]}
+// grade may be null: the transcriber posts a transcript it could not grade, and
+// that is a real state the app renders, not a broken payload. ran is when the
+// grader last actually ran, so the app can say so out loud.
 export function validateFeedback(p) {
   if (!p || typeof p !== "object") return "payload must be a JSON object";
   if (!DATE_RE.test(p.date || "")) return "date must be YYYY-MM-DD";
+  if (p.ran !== undefined && !isStr(p.ran)) return "ran must be an ISO timestamp string";
   if (!isArr(p.items)) return "items must be an array";
   if (p.items.length > 20) return "items: more than 20 graded answers for one day";
   for (let i = 0; i < p.items.length; i++) {
@@ -344,10 +364,12 @@ export function validateFeedback(p) {
     if (!it || typeof it !== "object") return `${at} must be an object`;
     if (!ID_RE.test(it.qid || "")) return `${at}.qid must match ${ID_RE}`;
     if (!isStr(it.transcriptExcerpt)) return `${at}.transcriptExcerpt must be a string`;
-    if (!isStr(it.grade) && !isNum(it.grade)) return `${at}.grade must be a string or a number`;
+    if (it.grade !== null && !isStr(it.grade) && !isNum(it.grade))
+      return `${at}.grade must be a string, a number, or null for ungraded`;
     if (!isStr(it.workshop)) return `${at}.workshop must be a string`;
     if (it.bestAnswerRef !== undefined && !isStr(it.bestAnswerRef))
       return `${at}.bestAnswerRef must be a string`;
+    if (it.ran !== undefined && !isStr(it.ran)) return `${at}.ran must be an ISO timestamp string`;
   }
   return null;
 }
