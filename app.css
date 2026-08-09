@@ -382,6 +382,13 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
   cursor:pointer;font-family:var(--mono)}
 .scorechip.unscored{background:var(--bg);border-color:var(--edge);color:var(--faint)}
 .scorechip .v{font-size:1.05rem;font-weight:700}
+.scorechip .reldot{width:9px;height:9px;border-radius:99px;align-self:center;flex:0 0 auto}
+.subscores .subhead b.rgreen{color:var(--up)}
+.subscores .subhead b.ryellow{color:var(--warn)}
+.subscores .subhead b.rred{color:var(--down)}
+.reldot.rgreen,.bar.rel i.rgreen{background:var(--up)}
+.reldot.ryellow,.bar.rel i.ryellow{background:var(--warn)}
+.reldot.rred,.bar.rel i.rred{background:var(--down)}
 .scorechip .cap{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
 .subscores{background:var(--card);border:1px solid var(--edge);border-radius:13px;
   box-shadow:var(--shadow);padding:12px 15px;margin:10px 0}

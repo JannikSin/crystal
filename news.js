@@ -11,6 +11,9 @@ import {
 import { readSetOf, markRead } from "./sync.js";
 
 let news = null;
+// scroll offset of the front page when a story was opened, so the back
+// button lands where you were, not at the top
+let listScroll = 0;
 
 const CAT_ORDER = ["ai", "aero", "world", "energy", "sports"];
 const CAT_LABEL = {
@@ -136,7 +139,7 @@ function renderNews(offlineNote, noEdition) {
         catLabel(s.cat) + (read.has(s.id) ? '<span class="rmark">✓ read</span>' : "")));
       item.appendChild(el("h3", {}, md(s.headline)));
       item.appendChild(el("p", { class: "one" }, md(s.oneLiner)));
-      const openIt = () => go("#/news/" + encodeURIComponent(s.id));
+      const openIt = () => { listScroll = window.scrollY; go("#/news/" + encodeURIComponent(s.id)); };
       item.addEventListener("click", openIt);
       item.addEventListener("keydown", (e) => { if (e.key === "Enter") openIt(); });
       list.appendChild(item);
@@ -149,7 +152,7 @@ function renderNews(offlineNote, noEdition) {
   if (canReveal) {
     const more = el("button", { type: "button", class: "morebtn" }, "Read 5 more ↓");
     more.addEventListener("click", () => {
-      markRead(date, visibleIds);
+      // read = opened the story, nothing else; revealing a batch marks nothing
       lsSet("crystal.newsbatch." + date, shownBatches + 1);
       renderNews("");
     });
@@ -165,6 +168,7 @@ function renderNews(offlineNote, noEdition) {
   }
 
   root.appendChild(appFooter(() => load(true)));
+  window.scrollTo(0, listScroll);
 }
 
 function openStory(id) {
@@ -183,9 +187,13 @@ function openStory(id) {
   renderStory(story);
 }
 
+// reliability traffic light: David glances at the color, reads red with care
+const relClass = (r) => (r >= 75 ? "rgreen" : r >= 50 ? "ryellow" : "rred");
+
 function renderStory(s) {
   if (!isTab("news")) return;
   root.innerHTML = "";
+  window.scrollTo(0, 0);
   const back = el("button", { type: "button", class: "backbtn" }, "← the dispatch");
   back.addEventListener("click", () => go("#/news"));
   root.appendChild(back);
@@ -196,10 +204,13 @@ function renderStory(s) {
   art.appendChild(el("p", { class: "one" }, md(s.oneLiner)));
 
   const isScored = scored(s, news);
+  const rel = isScored && s.scoreDetail && s.scoreDetail.reliability != null
+    ? Number(s.scoreDetail.reliability) : null;
   const chipRow = el("div", { style: "margin:10px 0 2px" });
   const chip = isScored
     ? el("button", { type: "button", class: "scorechip", "aria-expanded": "false" },
-        '<span class="v">' + Number(s.score) + '</span><span class="cap">/ 100 · tap for the working</span>')
+        (rel != null ? '<span class="reldot ' + relClass(rel) + '"></span>' : "")
+        + '<span class="v">' + Number(s.score) + '</span><span class="cap">/ 100 · tap for the working</span>')
     : el("button", { type: "button", class: "scorechip unscored", "aria-expanded": "false" },
         '<span class="v">unscored</span><span class="cap">no evaluation ran · tap</span>');
   chipRow.appendChild(chip);
@@ -209,10 +220,12 @@ function renderStory(s) {
   const d = s.scoreDetail || {};
   if (isScored) {
     [["Reliability", d.reliability, "rel"], ["Charge", d.charge, "chg"]].forEach((row) => {
+      const tone = row[2] === "rel" && row[1] != null ? relClass(Number(row[1])) : "";
       const sub = el("div", { class: "sub" });
       sub.appendChild(el("div", { class: "subhead" },
-        "<span>" + row[0] + "</span><b>" + (row[1] != null ? Number(row[1]) : "--") + "</b>"));
-      sub.appendChild(el("div", { class: "bar " + row[2] }, '<i style="width:' + Number(row[1] || 0) + '%"></i>'));
+        "<span>" + row[0] + "</span><b class=\"" + tone + "\">" + (row[1] != null ? Number(row[1]) : "--") + "</b>"));
+      sub.appendChild(el("div", { class: "bar " + row[2] },
+        '<i class="' + tone + '" style="width:' + Number(row[1] || 0) + '%"></i>'));
       subs.appendChild(sub);
     });
     if (d.reasoning) subs.appendChild(el("p", { class: "reason" }, md(d.reasoning)));

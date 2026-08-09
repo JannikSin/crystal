@@ -8,7 +8,7 @@
 // is dropped rather than trusted.
 // v7: round 2 shipped new CSS and four rewritten modules; a phone holding v6
 // would render the new markup with the old stylesheet.
-const CACHE = "crystal-v7";
+const CACHE = "crystal-v8";
 
 const PRECACHE = [
   "./",
