@@ -1,9 +1,9 @@
 // money.js: MONEY, "the ledger".
 //
-// Banking, not a dashboard. One big number, gauge dials per position, then
-// ruled tables: the accounts as of a stamp, then "Get the money", the funding
-// waterfall that says which committed buy is next and what raises the cash.
-// Positions, dials, charts and the LTCG maths are the proven v3 code.
+// Banking, not a dashboard. One big number, one sparkline row per position,
+// then ruled tables: the accounts as of a stamp, then "Get the money", the
+// funding waterfall that says which committed buy is next and what raises the
+// cash. Positions, charts and the LTCG maths are the proven v3 code.
 
 import {
   root, api, el, md, lsGet, lsSet, go, fmtMoney, fmtPct, arrowOf, dirClass, daysUntil,
@@ -81,20 +81,28 @@ function deltaHtml(amt, pct, cls) {
 
 const SEL_LABEL = { day: "day", week: "week", month: "month", life: "lifetime" };
 
-function gaugeSvg(pct, scale) {
-  const R = 27, C = 2 * Math.PI * R;
-  const ok = typeof pct === "number" && isFinite(pct);
-  const frac = ok ? Math.min(Math.abs(pct) / scale, 1) : 0;
-  const cls = ok ? dirClass(pct) : "";
+// The row sparkline: drawChart's shape, with the axes, the scrub, the tooltip
+// and the labels taken out. It carries direction only, and the signed number
+// beside it is what actually states the change, never the colour alone.
+const SPARK_W = 120, SPARK_H = 36, SPARK_PAD = 3;
+
+function sparkSvg(pts, cls) {
+  const open = '<svg width="' + SPARK_W + '" height="' + SPARK_H + '" viewBox="0 0 ' +
+    SPARK_W + " " + SPARK_H + '" aria-hidden="true">';
+  if (!pts || pts.length < 2) return open + "</svg>";
+  let min = Infinity, max = -Infinity;
+  pts.forEach((p) => { if (p.c < min) min = p.c; if (p.c > max) max = p.c; });
+  if (min === max) { min -= 1; max += 1; }
+  const X = (i) => SPARK_PAD + (i / (pts.length - 1)) * (SPARK_W - 2 * SPARK_PAD);
+  const Y = (c) => SPARK_PAD + (1 - (c - min) / (max - min)) * (SPARK_H - 2 * SPARK_PAD);
+  const d = pts.map((p, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(p.c).toFixed(1)).join("");
   const color = cls === "up" ? "var(--up)" : cls === "down" ? "var(--down)" : "var(--faint)";
-  const label = ok ? arrowOf(pct) + " " + fmtPct(pct) : "--";
-  return '<svg width="78" height="78" viewBox="0 0 78 78" role="img" aria-label="' + label + '">' +
-    '<circle cx="39" cy="39" r="' + R + '" fill="none" stroke="var(--hairline)" stroke-width="6"/>' +
-    (frac > 0 ? '<circle cx="39" cy="39" r="' + R + '" fill="none" stroke="' + color +
-      '" stroke-width="6" stroke-linecap="round" stroke-dasharray="' +
-      (frac * C).toFixed(1) + " " + C.toFixed(1) + '" transform="rotate(-90 39 39)"/>' : "") +
-    '<text x="39" y="43" text-anchor="middle" font-family="ui-monospace,SF Mono,Menlo,monospace"' +
-    ' font-size="11.5" font-weight="600" fill="' + color + '">' + label + "</text></svg>";
+  const last = pts.length - 1;
+  return open +
+    '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="1.6"' +
+    ' stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<circle cx="' + X(last).toFixed(1) + '" cy="' + Y(pts[last].c).toFixed(1) +
+    '" r="2.2" fill="' + color + '"/></svg>';
 }
 
 function ltcgBadge(pos) {
@@ -119,7 +127,7 @@ function renderMoney(note, noHoldings) {
 
   if (noHoldings || !holdings) {
     root.appendChild(emptyState("💰", "No holdings yet",
-      "The portfolio pipeline has not pushed. Once it does, the dials appear here."));
+      "The portfolio pipeline has not pushed. Once it does, the positions appear here."));
     root.appendChild(el("p", { class: "moneyfoot" }, "Educational, not advice. Verify on Schwab."));
     root.appendChild(appFooter(() => load(true)));
     return;
@@ -169,50 +177,54 @@ function renderMoney(note, noHoldings) {
   });
   root.appendChild(seg);
 
-  // ---- dials ----
-  const grid = el("div", { class: "dialgrid" });
-  const scale = (sel === "day" || sel === "week") ? 0.10 : 0.25;
+  // ---- position rows ----
+  // One row per position: ticker, value, the signed change for the selected
+  // window, and the shape of the price over that same window. "life" has no
+  // window to draw, so it borrows the month line and states the life number.
+  const range = sel === "week" ? "1w" : sel === "day" ? "1d" : "1m";
+  const rows = el("div", { class: "sparks" });
   positions.forEach((p) => {
     const q = quotes[p.ticker];
     const val = posValue(p);
     const basis = posBasis(p);
-    const dial = el("div", { class: "dial", role: "button", tabindex: "0", "data-ticker": p.ticker });
-    const gauge = el("div", {}, gaugeSvg(null, scale));
-    dial.appendChild(gauge);
-    dial.appendChild(el("div", { class: "tk2" }, p.ticker + (q && q.stale ? " · stale" : "")));
-    dial.appendChild(el("div", { class: "val" }, val !== null ? fmtMoney(val) : "--"));
-    dial.appendChild(el("div", { class: "sub" }, "in " + fmtMoney(basis, false)));
-    const dline = el("div", { class: "d" }, "");
-    dial.appendChild(dline);
-    dial.appendChild(el("div", { class: "ltcg" }, ltcgBadge(p)));
+    const row = el("div", { class: "spark", role: "button", tabindex: "0", "data-ticker": p.ticker });
+    const left = el("div", { class: "l" });
+    left.appendChild(el("div", { class: "tk2" }, p.ticker + (q && q.stale ? " · stale" : "")));
+    left.appendChild(el("div", { class: "val" }, val !== null ? fmtMoney(val) : "--"));
+    const dline = el("div", { class: "d" }, '<span class="delta">--</span>');
+    left.appendChild(dline);
+    const ltcg = ltcgBadge(p);
+    if (ltcg) left.appendChild(el("div", { class: "ltcg" }, ltcg));
+    row.appendChild(left);
+    const sp = el("div", { class: "sp" }, sparkSvg(null));
+    row.appendChild(sp);
     const openDetail = () => go("#/money/" + p.ticker);
-    dial.addEventListener("click", openDetail);
-    dial.addEventListener("keydown", (e) => { if (e.key === "Enter") openDetail(); });
-    grid.appendChild(dial);
+    row.addEventListener("click", openDetail);
+    row.addEventListener("keydown", (e) => { if (e.key === "Enter") openDetail(); });
+    rows.appendChild(row);
 
-    const apply = (pct, amt) => {
-      gauge.innerHTML = gaugeSvg(pct, scale);
+    const apply = (pct, amt, pts) => {
       dline.innerHTML = amt !== null ? deltaHtml(amt, pct) : '<span class="delta">--</span>';
+      sp.innerHTML = sparkSvg(pts, dirClass(pct != null ? pct : amt));
     };
-    if (val === null) { apply(null, null); return; }
-    if (sel === "life") {
-      apply(basis ? (val - basis) / basis : null, val - basis);
-    } else if (sel === "day") {
-      if (q && typeof q.prevClose === "number" && q.prevClose) {
-        apply((q.price - q.prevClose) / q.prevClose, posShares(p) * (q.price - q.prevClose));
-      } else apply(null, null);
-    } else {
-      refPrice(p.ticker, sel === "week" ? "1w" : "1m", (h) => {
-        if (h && h.points && h.points.length) {
-          const ref = h.points[0].c;
-          apply(ref ? (q.price - ref) / ref : null, posShares(p) * (q.price - ref));
-        } else apply(null, null);
-      });
-    }
+    if (val === null) return;
+    // the callback can fire synchronously out of the client cache, which is
+    // fine: the row holds its own elements and never looks itself up
+    refPrice(p.ticker, range, (h) => {
+      const pts = (h && h.points) || [];
+      if (sel === "life") { apply(basis ? (val - basis) / basis : null, val - basis, pts); return; }
+      if (sel === "day") {
+        if (q && typeof q.prevClose === "number" && q.prevClose) {
+          apply((q.price - q.prevClose) / q.prevClose, posShares(p) * (q.price - q.prevClose), pts);
+        } else apply(null, null, pts);
+        return;
+      }
+      const ref = pts.length ? pts[0].c : null;
+      if (ref) apply((q.price - ref) / ref, posShares(p) * (q.price - ref), pts);
+      else apply(null, null, pts);
+    });
   });
-  root.appendChild(grid);
-  root.appendChild(el("div", { class: "gaugehint" },
-    "ring full at ±" + Math.round(scale * 100) + "% · " + SEL_LABEL[sel] + " change"));
+  root.appendChild(rows);
 
   // ---- get the money ----
   const gm = getTheMoney(holdings);

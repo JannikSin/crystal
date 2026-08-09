@@ -1,9 +1,10 @@
-// career.js: CAREER, "the dossier".
+// career.js: CAREER, "the spec sheet".
 //
-// Index cards, not a feed. Manila stock, a red rule under the name, typewriter
-// facet lines. One company is spotlighted on top of the rolodex; the roster
-// below is a stack you flip through, tapping a card to turn it over. The
-// outreach slip is the one thing on this tab that ticks.
+// An engineering drawing, not a rolodex. Hairline rules, mono title-block
+// micro-labels, a faint blueprint grid behind today's file and nowhere else,
+// and one accent: violet. The roster is a flat spec list, a rank in a fixed
+// mono column and the name in serif, tapping a row to cycle its facet. The
+// work order at the foot is the one thing on this tab that ticks.
 
 import {
   root, el, md, blockMd, todayIso, appFooter, emptyState, loadCached, isTab,
@@ -16,7 +17,7 @@ export function open() {
   loadCached("/career", "crystal.career", render);
 }
 
-// a company card can carry several angles; the tap turns the card over
+// a company can carry several angles; the tap turns it to the next one
 function facetsOf(c) {
   const out = [];
   if (c.facet) out.push([c.facet, c.text || ""]);
@@ -32,32 +33,37 @@ function render(data, note, empty) {
   root.innerHTML = "";
   const head = el("header", { class: "dossier" });
   head.appendChild(el("div", { class: "eyebrow" }, "🔮 crystal · career"));
-  head.appendChild(el("h1", {}, "The Dossier"));
+  head.appendChild(el("h1", {}, "The Spec Sheet"));
   if (data && data.date) head.appendChild(el("div", { class: "strap" }, "file of " + md(data.date)));
   root.appendChild(head);
 
   if (note) root.appendChild(el("div", { class: "banner" }, note));
 
   if (empty || !data) {
-    root.appendChild(emptyState("🗂", "No dossier yet",
+    root.appendChild(emptyState("📐", "No sheet yet",
       "The roster and today's name land with the morning build."));
     root.appendChild(appFooter(() => loadCached("/career", "crystal.career", render, true)));
     return;
   }
 
   if (data.spotlight) root.appendChild(spotCard(data.spotlight));
-  if (Array.isArray(data.roster) && data.roster.length) root.appendChild(rolodex(data.roster, data.spotlight));
+  if (Array.isArray(data.roster) && data.roster.length) root.appendChild(specList(data.roster, data.spotlight));
   if (data.outreach) root.appendChild(outreachSlip(data.outreach));
   if (data.signals) root.appendChild(signalsBlock(data.signals));
 
   root.appendChild(appFooter(() => loadCached("/career", "crystal.career", render, true)));
 }
 
+// the one card with the blueprint grid behind it. Everything else on the tab
+// is flat, so the grid alone says "this is the sheet you are reading today".
 function spotCard(s) {
   const facets = facetsOf(s);
   let i = 0;
   const card = el("section", { class: "spot" });
-  card.appendChild(el("div", { class: "tab" }, "today's file" + (s.new ? " · new" : "")));
+  const tb = el("div", { class: "tb" });
+  tb.appendChild(el("span", {}, "today's file"));
+  if (s.new) tb.appendChild(el("span", { class: "rev" }, "new"));
+  card.appendChild(tb);
   card.appendChild(el("h2", {}, md(s.name)));
   card.appendChild(el("div", { class: "rule" }));
   const facet = el("div", { class: "facet" }, md(facets[0][0]));
@@ -66,7 +72,7 @@ function spotCard(s) {
   card.appendChild(facet);
   card.appendChild(body);
   if (facets.length > 1) {
-    const flip = el("button", { type: "button", class: "scanbtn" }, "turn the card");
+    const flip = el("button", { type: "button", class: "turn" }, "next view");
     flip.addEventListener("click", () => {
       i = (i + 1) % facets.length;
       facet.innerHTML = md(facets[i][0]);
@@ -78,30 +84,32 @@ function spotCard(s) {
   return card;
 }
 
-function rolodex(roster, spotlight) {
-  const wrap = el("div", { class: "rolodex" });
+// the roster as a spec list: rank in a fixed mono column, name in serif, the
+// facet label to the right, the facet text below once the row is open
+function specList(roster, spotlight) {
+  const wrap = el("div", { class: "spec" });
+  wrap.appendChild(el("div", { class: "sh" }, "roster · rank / name / view"));
   roster.forEach((c) => {
-    if (spotlight && c.name === spotlight.name) return; // already on top
+    if (spotlight && c.name === spotlight.name) return; // already on the sheet
     const facets = facetsOf(c);
-    let i = 0, flipped = false;
-    const card = el("button", { type: "button", class: "rcard" });
-    const n = el("div", { class: "n" });
-    if (typeof c.rank === "number") n.appendChild(el("span", { class: "rk" }, String(c.rank).padStart(2, "0")));
-    n.appendChild(el("span", {}, md(c.name)));
-    const f = el("div", { class: "f" }, md(facets[0][0]));
-    const x = el("div", { class: "x" }, "");
+    let i = 0, open = false;
+    const row = el("button", { type: "button", class: "specrow" });
+    row.appendChild(el("span", { class: "rk" },
+      typeof c.rank === "number" ? String(c.rank).padStart(2, "0") : "--"));
+    row.appendChild(el("span", { class: "nm" }, md(c.name)));
+    const f = el("span", { class: "f" }, md(facets[0][0]));
+    const x = el("span", { class: "x" }, "");
     x.hidden = true;
-    card.appendChild(n);
-    card.appendChild(f);
-    card.appendChild(x);
-    card.addEventListener("click", () => {
-      if (!flipped) { flipped = true; }
-      else { i = (i + 1) % facets.length; if (i === 0) { flipped = false; } }
+    row.appendChild(f);
+    row.appendChild(x);
+    row.addEventListener("click", () => {
+      if (!open) { open = true; }
+      else { i = (i + 1) % facets.length; if (i === 0) { open = false; } }
       f.innerHTML = md(facets[i][0]);
-      x.innerHTML = flipped ? md(facets[i][1]) : "";
-      x.hidden = !flipped;
+      x.innerHTML = open ? md(facets[i][1]) : "";
+      x.hidden = !open;
     });
-    wrap.appendChild(card);
+    wrap.appendChild(row);
   });
   return wrap;
 }
@@ -117,19 +125,23 @@ function contactHref(c) {
   return "";
 }
 
-// the one tickable thing on this tab. Same pipe as every other tick, so the
-// vault retires the name on the next pull.
+// the one tickable thing on this tab, drawn as a work order. Same pipe as
+// every other tick, so the vault retires the name on the next pull.
 function outreachSlip(o) {
   const date = todayIso();
   const local = localTicks(date);
   const entry = local[o.tickId];
   const checked = entry ? !!entry.done : !!o.checked;
   const slip = el("section", { class: "slip" + (checked ? " done" : "") });
-  slip.appendChild(el("div", { class: "k" }, "reach out"));
-  slip.appendChild(el("h3", {}, md(o.name)));
+  const k = el("div", { class: "k" });
+  k.appendChild(el("span", {}, "work order"));
+  k.appendChild(el("span", { class: "no" }, "one reach-out"));
+  slip.appendChild(k);
+  const inner = el("div", { class: "in" });
+  inner.appendChild(el("h3", {}, md(o.name)));
   const body = el("div", { class: "body" });
   blockMd(body, o.body || "");
-  slip.appendChild(body);
+  inner.appendChild(body);
   const act = el("div", { class: "act" });
   act.appendChild(tickControl(date, o.tickId, checked, {
     kind: "outreach", section: OUTREACH_SECTION,
@@ -144,7 +156,8 @@ function outreachSlip(o) {
     act.appendChild(el("a", { class: "go", href, target: "_blank", rel: "noopener" },
       href.indexOf("sms:") === 0 ? "text ↗" : href.indexOf("mailto:") === 0 ? "email ↗" : "open ↗"));
   }
-  slip.appendChild(act);
+  inner.appendChild(act);
+  slip.appendChild(inner);
   return slip;
 }
 

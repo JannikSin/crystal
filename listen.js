@@ -93,13 +93,17 @@ function render(data, note, empty) {
       return m !== null && (f === "<1h" ? m < 60 : m >= 60);
     });
 
-  const live = queue.filter((q) => !listened(q.id) && passes(q));
+  // R2: a ticked row STAYS, struck through, for the rest of the day. A thumb
+  // that lands on the wrong box used to make a row vanish with no way back;
+  // now the box is still there to untick. Rows leave only when tomorrow's
+  // payload no longer carries them.
+  const live = queue.filter(passes);
   const list = el("div", {});
   if (!live.length) {
     list.appendChild(el("p", { class: "empty" },
       queue.length ? "Nothing left under these filters." : "The queue is empty. Run the sweep."));
   }
-  live.forEach((it) => list.appendChild(queueRow(date, it)));
+  live.forEach((it) => list.appendChild(queueRow(date, it, listened(it.id))));
   root.appendChild(list);
 
   const find = el("button", { type: "button", class: "findmore" }, "Find more");
@@ -143,14 +147,13 @@ function render(data, note, empty) {
   root.appendChild(appFooter(reload));
 }
 
-function queueRow(date, it) {
-  const row = el("article", { class: "qrow" });
-  row.appendChild(tickControl(date, it.id, false, {
+function queueRow(date, it, done) {
+  const row = el("article", { class: "qrow" + (done ? " done" : "") });
+  // tickControl calls setTick(date, id, false, extra) on an untick, which is
+  // the tombstone path in sync.js: the row comes back live, here and on Today.
+  row.appendChild(tickControl(date, it.id, done, {
     kind: "listen", section: SECTION, label: it.title, target: it.id,
-  }, () => {
-    row.classList.add("gone");
-    setTimeout(() => row.remove(), 320);
-  }));
+  }, (on) => row.classList.toggle("done", on)));
   const meta = el("div", { class: "meta" });
   const tags = el("div", { class: "tags" });
   (it.tags || []).forEach((t) => tags.appendChild(el("span", {}, (TAG_EMOJI[t] || "•") + " " + md(t))));

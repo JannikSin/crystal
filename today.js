@@ -1,8 +1,9 @@
 // today.js: TODAY, "the timeline".
 //
-// The day runs down a rail on the left edge. Five slot markers (dawn, morning,
-// day, evening, night), items hanging off the rail as bare labels with a
-// checkbox, and a now-line placed by interpolating the clock inside its band.
+// The day runs down a rail on the left edge. Five slot markers: four clock
+// bands (dawn, morning, evening, night) and the whenever pool in the middle,
+// items hanging off the rail as bare labels with a checkbox, and a now-line
+// placed by interpolating the clock inside its band.
 // Tier is expressed ONLY as the colour of the dot. No descriptions on the
 // surface: detail is one tap away, on the items that have any.
 
@@ -28,6 +29,14 @@ const SLOTS = [
   { t: "evening", from: 17, to: 21 },
   { t: "night", from: 21, to: 24 },
 ];
+// R2: "day" is no longer a clock band. It is the pool of things done whenever
+// there is time, so it shows no hours (an hour range would be a promise the
+// pool does not make) and the now-line never walks through it.
+const POOL = "day";
+// The scanned handwritten list arrives as ordinary timeline items under this
+// section. The pen glyph is the only thing that separates his own writing from
+// what the pipeline generated.
+const PEN_SECTION = "Your list";
 
 let brief = null;
 let viewDate = "";       // "" = latest; else a YYYY-MM-DD picked in the switcher
@@ -248,9 +257,11 @@ function timeline(date) {
 
   SLOTS.forEach((slot) => {
     const sec = el("section", { class: "tl-slot", "data-slot": slot.t });
-    sec.appendChild(el("div", { class: "tl-mark" },
-      slot.t + '<span class="hrs">' + String(slot.from).padStart(2, "0") + "-" +
-      String(slot.to).padStart(2, "0") + "</span>"));
+    sec.appendChild(el("div", { class: "tl-mark" }, slot.t === POOL
+      ? 'whenever<span class="hrs">· as there is time</span>'
+      : slot.t + '<span class="hrs">' + String(slot.from).padStart(2, "0") + "-" +
+        String(slot.to).padStart(2, "0") + "</span>"));
+    // payload order is authoritative inside every band, the pool included
     items.filter((it) => it.t === slot.t).forEach((it) => sec.appendChild(row(date, it)));
     wrap.appendChild(sec);
   });
@@ -266,13 +277,21 @@ function timeline(date) {
   return wrap;
 }
 
+// The clock is interpolated across the two real stretches of the day, 05-12
+// and 17-24. Between them there is only the pool, so the marker pins to its
+// top rather than crawling down a band that has no hours.
 function nowTop(wrap) {
   const d = new Date();
   const h = d.getHours() + d.getMinutes() / 60;
-  let band = SLOTS.find((s) => h >= s.from && h < s.to);
-  let frac;
-  if (band) frac = (h - band.from) / (band.to - band.from);
-  else { band = SLOTS[SLOTS.length - 1]; frac = 1; } // the small hours
+  let band, frac;
+  if (h >= 12 && h < 17) {
+    band = SLOTS.find((s) => s.t === POOL);
+    frac = 0;
+  } else {
+    band = SLOTS.find((s) => s.t !== POOL && h >= s.from && h < s.to);
+    if (band) frac = (h - band.from) / (band.to - band.from);
+    else { band = SLOTS[SLOTS.length - 1]; frac = 1; } // the small hours
+  }
   const sec = wrap.querySelector('[data-slot="' + band.t + '"]');
   if (!sec) return null;
   return sec.offsetTop + frac * sec.offsetHeight;
@@ -303,8 +322,10 @@ function row(date, it) {
   r.appendChild(ctl);
 
   const hasDetail = !!it.detail || it.kind === "answer" || isScanItem(it);
+  // the glyph is ours, not the payload's, so it is concatenated OUTSIDE md()
+  const pen = it.section === PEN_SECTION ? '<span class="pen">✎ </span>' : "";
   const lab = el("button", { type: "button", class: "tl-lab", "data-more": hasDetail ? "1" : "0" },
-    md(it.label));
+    pen + md(it.label));
   r.appendChild(lab);
 
   if (!hasDetail) return r;

@@ -8,8 +8,8 @@
      TODAY    the timeline   a rail down the day, bare labels, instrument dense
      NEWS     the dispatch   newspaper front page, serif, ranked, batch reveal
      MARKETS  the terminal   mono grid, dark panel in both themes, status dots
-     MONEY    the ledger     banking dials + ruled account tables
-     CAREER   the dossier    index cards on a rolodex, typewriter facet lines
+     MONEY    the ledger     banking rows, a sparkline each, ruled tables
+     CAREER   the spec sheet engineering drawing, hairlines, title-block labels
      LISTEN   the walkman    big media rows, tag chips, filter row, history tape
 
    Sections below are in that order after the shared base.
@@ -39,8 +39,8 @@
   --term-bg:#101319; --term-panel:#171b24; --term-ink:#dbe3ee; --term-dim:#7e8b9e;
   --term-line:#242b38; --term-up:#3fbf74; --term-down:#f2705f;
   --dot-hold:#3fbf74; --dot-watch:#e0a63a; --dot-fired:#e2564f;
-  /* the dossier index card */
-  --manila:#fbf6ea; --manila-edge:#e6dcc4; --manila-ink:#2c2519; --rule:#c4453c;
+  /* the spec sheet: one grid line, low enough to read as paper, not as a table */
+  --blueline:color-mix(in srgb, var(--accent) 13%, transparent);
 }
 @media(prefers-color-scheme:dark){
   :root{
@@ -56,7 +56,7 @@
     --shadow:0 1px 2px rgba(0,0,0,.25), 0 4px 14px rgba(0,0,0,.18);
     --glass:rgba(18,17,24,.86);
     --slate:#8b93a8;
-    --manila:#221e17; --manila-edge:#3a3327; --manila-ink:#ecdfc6; --rule:#d4685f;
+    --blueline:color-mix(in srgb, var(--accent) 16%, transparent);
   }
 }
 *{box-sizing:border-box}
@@ -173,9 +173,10 @@ label.tk input:disabled+.box{opacity:.35}
 
 /* =========================================================================
    TODAY: the timeline
-   A rail down the left edge, five slot markers, items hanging off it as bare
-   rows. Tier is colour only. The now-line is placed by JS by interpolating
-   the clock inside its slot band.
+   A rail down the left edge, five slot markers (four clock bands and the
+   whenever pool), items hanging off it as bare rows. Tier is colour only. The
+   now-line is placed by JS by interpolating the clock inside its band, and it
+   pins to the top of the pool between 12 and 17, which owns no hours.
    ========================================================================= */
 .wake{margin-left:auto;background:none;border:1px solid var(--edge);border-radius:9px;
   color:var(--faint);cursor:pointer;font-size:.9rem;line-height:1;padding:5px 9px;
@@ -221,6 +222,8 @@ label.tk input:disabled+.box{opacity:.35}
   background-image:linear-gradient(currentColor,currentColor);background-repeat:no-repeat;
   background-size:0% 1.4px;background-position:0 88%;transition:background-size .3s,opacity .2s}
 .tl-lab[data-more="1"]{cursor:pointer}
+/* his own handwriting, scanned in: the pen says the line is his, not ours */
+.tl-lab .pen{color:var(--faint)}
 .tl-lab[data-more="1"]::after{content:" ⌄";color:var(--faint);font-size:.85em}
 .tl-row.open .tl-lab[data-more="1"]::after{content:" ⌃"}
 .tl-row.done .tl-lab{opacity:.42;background-size:100% 1.4px}
@@ -453,9 +456,9 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 
 /* =========================================================================
    MONEY: the ledger
-   Banking. A big number, gauge dials, then ruled tables: accounts as of a
-   stamp, then the funding waterfall that answers "where does the money come
-   from".
+   Banking. A big number, one sparkline row per position, then ruled tables:
+   accounts as of a stamp, then the funding waterfall that answers "where does
+   the money come from".
    ========================================================================= */
 .pf{background:var(--card);border:1px solid var(--edge);border-radius:14px;
   box-shadow:var(--shadow);margin:14px 0 0;padding:13px 16px 14px}
@@ -471,18 +474,20 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 .seg button{flex:1;border:none;background:none;border-radius:9px;padding:6px 0;cursor:pointer;
   font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
 .seg button[aria-current="true"]{background:var(--card);color:var(--accent-ink);box-shadow:var(--shadow)}
-.dialgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:12px}
-.dial{background:var(--card);border:1px solid var(--edge);border-radius:14px;
-  box-shadow:var(--shadow);padding:12px 12px 11px;cursor:pointer;text-align:center}
-.dial:active{background:var(--press)}
-.dial svg{display:block;margin:0 auto}
-.dial .tk2{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;color:var(--ink);
-  font-weight:600;margin-top:6px}
-.dial .val{font-family:var(--serif);font-weight:600;font-size:1.18rem;font-variant-numeric:tabular-nums}
-.dial .sub{font-family:var(--mono);font-size:.66rem;color:var(--faint);margin-top:1px}
-.dial .d{font-family:var(--mono);font-size:.74rem;margin-top:3px}
-.dial .ltcg{margin-top:7px}
-.gaugehint{font-family:var(--mono);font-size:.62rem;color:var(--faint);text-align:right;margin-top:8px}
+.sparks{margin-top:12px;background:var(--card);border:1px solid var(--edge);border-radius:14px;
+  box-shadow:var(--shadow);overflow:hidden}
+.spark{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;
+  border-top:1px solid var(--hairline)}
+.spark:first-child{border-top:none}
+.spark:active{background:var(--press)}
+.spark .l{flex:1;min-width:0}
+.spark .tk2{font-family:var(--mono);font-size:.76rem;letter-spacing:.1em;color:var(--ink);font-weight:600}
+.spark .val{font-family:var(--serif);font-weight:600;font-size:1.16rem;
+  font-variant-numeric:tabular-nums;line-height:1.25}
+.spark .d{font-family:var(--mono);font-size:.74rem}
+.spark .ltcg{margin-top:5px}
+.spark .sp{flex:0 0 120px;height:36px}
+.spark .sp svg{display:block}
 .ledger{margin-top:18px;background:var(--card);border:1px solid var(--edge);border-radius:14px;
   box-shadow:var(--shadow);overflow:hidden}
 .ledger .lh{display:flex;align-items:baseline;gap:8px;padding:11px 15px 9px;
@@ -538,56 +543,66 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
   text-transform:uppercase;color:var(--accent)}
 
 /* =========================================================================
-   CAREER: the dossier
-   Index cards. Manila stock, a red rule under the name, typewriter facets.
-   The spotlight card is the one on top of the rolodex; the roster below is a
-   stack you flip through, tapping a card to cycle its facet.
+   CAREER: the spec sheet
+   An engineering drawing. Hairline rules instead of boxes, mono uppercase
+   micro-labels the way a title block is set, and exactly one accent, violet.
+   The blueprint grid appears on the spotlight card and NOWHERE else, so the
+   sheet he is meant to read today is the only thing wearing it.
    ========================================================================= */
-.dossier .eyebrow{color:var(--rule)}
-.spot{background:var(--manila);border:1px solid var(--manila-edge);border-radius:4px;
-  padding:16px 18px 17px;margin:14px 0 0;color:var(--manila-ink);
-  box-shadow:var(--shadow),0 0 0 6px color-mix(in srgb,var(--manila) 55%,transparent)}
-.spot .tab{font-family:var(--mono);font-size:.58rem;letter-spacing:.26em;text-transform:uppercase;
-  color:var(--rule)}
-.spot h2{font-family:var(--serif);font-weight:600;font-size:1.7rem;margin:5px 0 0;
-  letter-spacing:-.01em;line-height:1.1}
-.spot .rule{height:1.5px;background:var(--rule);opacity:.55;margin:9px 0 10px}
-.spot .facet{font-family:var(--mono);font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;
-  color:color-mix(in srgb,var(--manila-ink) 60%,transparent)}
-.spot .body{font-size:.94rem;margin-top:5px}
+.dossier .eyebrow{color:var(--accent)}
+.spot{margin:16px 0 0;padding:14px 16px 16px;border:1px solid var(--edge);border-radius:5px;
+  background-color:var(--card);
+  background-image:repeating-linear-gradient(0deg,var(--blueline) 0 1px,transparent 1px 16px),
+                   repeating-linear-gradient(90deg,var(--blueline) 0 1px,transparent 1px 16px);
+  background-position:-1px -1px}
+.spot .tb{display:flex;align-items:baseline;gap:10px;font-family:var(--mono);font-size:.58rem;
+  letter-spacing:.26em;text-transform:uppercase;color:var(--accent);
+  border-bottom:1px solid var(--edge);padding-bottom:7px}
+.spot .tb .rev{margin-left:auto;color:var(--faint);letter-spacing:.16em}
+.spot h2{font-family:var(--serif);font-weight:600;font-size:1.66rem;margin:10px 0 0;
+  letter-spacing:-.01em;line-height:1.12}
+.spot .rule{height:1px;background:var(--edge);margin:9px 0 9px}
+.spot .facet{font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--faint)}
+.spot .body{font-size:.94rem;margin-top:4px}
 .spot .body p{margin:.4rem 0}
-.spot .body a{color:var(--rule)}
-.rolodex{margin-top:20px;display:grid;gap:8px}
-.rcard{background:var(--manila);border:1px solid var(--manila-edge);border-left:4px solid var(--rule);
-  border-radius:3px;padding:10px 14px 11px;color:var(--manila-ink);cursor:pointer;
-  text-align:left;width:100%;box-shadow:var(--shadow);display:block}
-.rcard:active{transform:translateX(2px)}
-.rcard .n{font-family:var(--serif);font-weight:600;font-size:1.02rem;display:flex;
-  align-items:baseline;gap:8px}
-.rcard .n .rk{font-family:var(--mono);font-size:.62rem;color:var(--rule);letter-spacing:.1em}
-.rcard .f{font-family:var(--mono);font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;
-  color:color-mix(in srgb,var(--manila-ink) 55%,transparent);margin-top:3px}
-.rcard .x{font-size:.88rem;margin-top:4px;
-  color:color-mix(in srgb,var(--manila-ink) 85%,transparent)}
-.slip{background:var(--card);border:1px solid var(--edge);border-radius:13px;box-shadow:var(--shadow);
-  padding:13px 16px 14px;margin-top:20px;position:relative;overflow:hidden}
-.slip::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}
-.slip .k{font-family:var(--mono);font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--accent)}
-.slip h3{font-family:var(--serif);font-weight:600;font-size:1.24rem;margin:4px 0 6px}
+.turn{display:inline-block;margin-top:11px;padding:7px 14px;border-radius:4px;
+  border:1px solid var(--soft-edge);background:transparent;color:var(--accent-ink);cursor:pointer;
+  font-family:var(--mono);font-size:.62rem;letter-spacing:.2em;text-transform:uppercase}
+.turn:active{background:var(--soft)}
+.spec{margin-top:24px}
+.spec .sh,.signals .sh{font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--faint);display:flex;gap:9px;align-items:center;
+  padding-bottom:6px}
+.spec .sh::after,.signals .sh::after{content:"";flex:1;height:1px;background:var(--edge)}
+.specrow{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 12px;width:100%;
+  padding:11px 2px;text-align:left;color:inherit;background:none;border:none;
+  border-top:1px solid var(--hairline);cursor:pointer}
+.specrow:active{background:var(--press)}
+.specrow .rk{flex:0 0 30px;font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;
+  color:var(--faint);font-variant-numeric:tabular-nums}
+.specrow .nm{font-family:var(--serif);font-weight:600;font-size:1.04rem;min-width:0}
+.specrow .f{margin-left:auto;font-family:var(--mono);font-size:.56rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--accent);text-align:right}
+.specrow .x{flex:1 0 100%;margin:5px 0 0 42px;font-size:.88rem;color:var(--dim);line-height:1.45}
+/* the work order: a ruled block, not a card. The violet edge is the only fill */
+.slip{margin-top:26px;border:1px solid var(--edge);border-radius:5px;background:var(--card);
+  border-left:3px solid var(--accent);overflow:hidden}
+.slip .k{display:flex;align-items:baseline;gap:10px;padding:8px 14px;
+  border-bottom:1px solid var(--edge);font-family:var(--mono);font-size:.6rem;
+  letter-spacing:.24em;text-transform:uppercase;color:var(--accent)}
+.slip .k .no{margin-left:auto;color:var(--faint);letter-spacing:.16em}
+.slip .in{padding:11px 14px 13px}
+.slip h3{font-family:var(--serif);font-weight:600;font-size:1.22rem;margin:0 0 6px}
 .slip .body{font-size:.9rem;color:var(--dim)}
 .slip .body p{margin:.45rem 0}
-.slip .act{display:flex;align-items:center;gap:12px;margin-top:10px;padding-top:10px;
+.slip .act{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:11px;padding-top:11px;
   border-top:1px solid var(--hairline)}
 .slip .act .lbl{font-size:.92rem}
 .slip.done .act .lbl{opacity:.45;text-decoration:line-through}
-.signals{margin-top:20px}
-.signals .sh{font-family:var(--mono);font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--faint);display:flex;gap:8px;align-items:center}
-.signals .sh::after{content:"";flex:1;height:1px;background:var(--edge)}
-.signals .item{background:var(--card);border:1px solid var(--edge);border-radius:12px;
-  padding:11px 14px;margin-top:9px;font-size:.89rem;box-shadow:var(--shadow)}
-.signals .item p{margin:.4rem 0}
+.signals{margin-top:26px}
+.signals .item{border-top:1px solid var(--hairline);padding:10px 2px;font-size:.89rem}
+.signals .item p{margin:.35rem 0}
 
 /* =========================================================================
    LISTEN: the walkman
@@ -607,8 +622,11 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 @media(prefers-color-scheme:dark){.filters button[aria-pressed="true"]{color:#16141f}}
 .qrow{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--edge);
   border-radius:18px;padding:14px 16px;margin-top:10px;box-shadow:var(--shadow);
-  transition:opacity .3s,transform .3s}
-.qrow.gone{opacity:0;transform:translateX(28px)}
+  transition:opacity .2s}
+/* a ticked row does not leave: it stays struck through, and the box that put
+   it there is still the box that takes it back */
+.qrow.done{opacity:.5}
+.qrow.done h3{text-decoration:line-through}
 .qrow .meta{flex:1;min-width:0}
 .qrow .tags{display:flex;gap:5px;flex-wrap:wrap;align-items:center;
   font-family:var(--mono);font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}

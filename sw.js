@@ -6,7 +6,9 @@
 // origin and each SW deletes only its own prefix.
 // v5: the caching rules themselves changed (ok + basic only), so the old cache
 // is dropped rather than trusted.
-const CACHE = "crystal-v6";
+// v7: round 2 shipped new CSS and four rewritten modules; a phone holding v6
+// would render the new markup with the old stylesheet.
+const CACHE = "crystal-v7";
 
 const PRECACHE = [
   "./",
