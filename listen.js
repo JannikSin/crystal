@@ -117,11 +117,11 @@ function render(data, note, empty) {
   const tape = el("details", { class: "tape" });
   tape.appendChild(el("summary", {}, "history · " + past.length));
   // the tape only grows, so finding "that Acquired one" needs a text box
-  const find = el("input", { class: "hfind", type: "search", placeholder: "filter the tape",
+  const hunt = el("input", { class: "hfind", type: "search", placeholder: "filter the tape",
     "aria-label": "Filter history" });
   const rows = el("div", {});
   const paintTape = () => {
-    const q = find.value.trim().toLowerCase();
+    const q = hunt.value.trim().toLowerCase();
     rows.innerHTML = "";
     past
       .filter((h) => !q || String(h.title || h.id || "").toLowerCase().indexOf(q) >= 0)
@@ -133,8 +133,8 @@ function render(data, note, empty) {
         rows.appendChild(row);
       });
   };
-  find.addEventListener("input", paintTape);
-  tape.appendChild(find);
+  hunt.addEventListener("input", paintTape);
+  tape.appendChild(hunt);
   tape.appendChild(rows);
   paintTape();
   root.appendChild(tape);

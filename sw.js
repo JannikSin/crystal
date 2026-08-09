@@ -6,7 +6,7 @@
 // origin and each SW deletes only its own prefix.
 // v5: the caching rules themselves changed (ok + basic only), so the old cache
 // is dropped rather than trusted.
-const CACHE = "crystal-v5";
+const CACHE = "crystal-v6";
 
 const PRECACHE = [
   "./",
