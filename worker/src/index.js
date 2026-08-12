@@ -59,7 +59,7 @@
 import {
   validateNews,
   validateMarkets,
-  validateHoldings,
+  validateHoldings, validateLibrary, validateMoves,
   validateBriefV2,
   validateListen,
   validateCareer,
@@ -530,6 +530,44 @@ export default {
       if (bad) return json(400, { error: bad });
       await env.STORE.put("holdings:latest", raw);
       return json(200, { ok: true, asOf: body.asOf, positions: body.positions.length });
+    }
+
+    // ---------- library ----------
+    // The vault index: the write-ups themselves, so the phone can read them
+    // offline instead of bouncing to Obsidian. Same latest-wins shape as
+    // holdings; the laptop pushes, the phone reads.
+    if (path === "/library" && method === "GET") {
+      const raw = await env.STORE.get("library:latest");
+      if (!raw) return json(404, { error: "no library yet" });
+      return raw200(raw);
+    }
+
+    if (path === "/library" && method === "POST") {
+      const { raw, body, err } = await readBody(request);
+      if (err) return err;
+      const bad = validateLibrary(body);
+      if (bad) return json(400, { error: bad });
+      await env.STORE.put("library:latest", raw);
+      return json(200, { ok: true, notes: body.notes.length });
+    }
+
+    // ---------- moves ----------
+    // Why each ticker moved today, lifted from the market-close digest. The
+    // Money tab shows it next to the red number instead of leaving David to
+    // guess at a reason.
+    if (path === "/moves" && method === "GET") {
+      const raw = await env.STORE.get("moves:latest");
+      if (!raw) return json(404, { error: "no moves yet" });
+      return raw200(raw);
+    }
+
+    if (path === "/moves" && method === "POST") {
+      const { raw, body, err } = await readBody(request);
+      if (err) return err;
+      const bad = validateMoves(body);
+      if (bad) return json(400, { error: bad });
+      await env.STORE.put("moves:latest", raw);
+      return json(200, { ok: true, date: body.date, tickers: Object.keys(body.moves).length });
     }
 
     // ---------- listen ----------

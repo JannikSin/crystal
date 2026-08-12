@@ -13,7 +13,43 @@ import { cachedEdition } from "./news.js";
 
 let holdings = null;
 let quotes = {};
+let moves = null;
 const quotesMeta = { stale: false };
+
+// Why a ticker moved, lifted from the market-close digest by push_moves.py.
+// Deliberately absent rather than guessed: when the digest has no explanation
+// the tab says so, because an engine that always produces a reason will invent
+// one, and an invented cause is worse than an admitted gap.
+function loadMoves(then) {
+  moves = moves || lsGet("crystal.moves", null);
+  api("/moves")
+    .then((data) => { moves = data; lsSet("crystal.moves", data); if (then) then(); })
+    .catch(() => { if (then) then(); });
+}
+
+function whyMoved(ticker) {
+  const m = moves && moves.moves && moves.moves[ticker];
+  const box = el("div", { class: "whymoved" + (m && m.tone ? " " + m.tone : "") });
+  const when = moves && moves.date ? String(moves.date).slice(0, 10) : "";
+  box.appendChild(el("div", { class: "wh" }, "why it moved" + (when ? " · " + md(when) : "")));
+  if (!m) {
+    box.appendChild(el("div", {},
+      "No explanation on file. Either the market-close digest has not run yet, or it found nothing " +
+      "company-specific. Most single-day moves have no cause worth naming, and a made-up reason is " +
+      "worse than none."));
+    return box;
+  }
+  box.appendChild(el("div", {}, md(m.why)));
+  if (m.sources && m.sources.length) {
+    const src = el("div", { class: "wsrc" });
+    m.sources.forEach((s) => {
+      if (!/^https:\/\/[^\s"'<>`]+$/.test(s.url || "")) return;
+      src.appendChild(el("a", { href: s.url, target: "_blank", rel: "noopener" }, md(s.label)));
+    });
+    box.appendChild(src);
+  }
+  return box;
+}
 
 export function open(parts) {
   if (parts && parts[1]) { loadDetail(parts[1].toUpperCase()); return; }
@@ -309,6 +345,7 @@ function loadDetail(ticker) {
   }
   renderDetail(ticker);
   if (!quotes[ticker]) refreshQuotes();
+  if (!moves) loadMoves(() => renderDetail(ticker));
 }
 
 function renderDetail(ticker) {
@@ -334,6 +371,8 @@ function renderDetail(ticker) {
     det.appendChild(el("div", { style: "font-family:var(--mono);font-size:.78rem" },
       "today " + deltaHtml(posShares(pos) * (q.price - q.prevClose), dp)));
   }
+
+  det.appendChild(whyMoved(ticker));
 
   det.appendChild(el("h4", {}, "Price"));
   const range = lsGet("crystal.chartRange", "1m");

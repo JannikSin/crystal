@@ -373,3 +373,63 @@ export function validateFeedback(p) {
   }
   return null;
 }
+
+// ---------- library ----------
+// {date, notes:[{id, title, folder, summary, updated, body, uri}]}
+// body is the note's markdown, already stripped of frontmatter by the pusher.
+export function validateLibrary(p) {
+  if (!p || typeof p !== "object") return "payload must be a JSON object";
+  if (!DATE_RE.test(p.date || "")) return "date must be YYYY-MM-DD";
+  if (!isArr(p.notes) || !p.notes.length) return "notes must be a non-empty array";
+  if (p.notes.length > 200) return "notes: 200 max, trim the index";
+  const seen = new Set();
+  for (let i = 0; i < p.notes.length; i++) {
+    const n = p.notes[i], at = `notes[${i}]`;
+    if (!n || typeof n !== "object") return `${at} must be an object`;
+    if (!ID_RE.test(n.id || "")) return `${at}.id must match ${ID_RE}`;
+    if (seen.has(n.id)) return `${at}.id duplicated: ${n.id}`;
+    seen.add(n.id);
+    if (!isStr(n.title) || !n.title.trim()) return `${at}.title required`;
+    if (!isStr(n.folder)) return `${at}.folder must be a string`;
+    if (!isStr(n.body) || !n.body.trim()) return `${at}.body required`;
+    if (n.body.length > 120000) return `${at}.body too long (120k max)`;
+    if (n.summary !== undefined && !isStr(n.summary)) return `${at}.summary must be a string`;
+    if (n.updated !== undefined && !isStr(n.updated)) return `${at}.updated must be a string`;
+    // uri lands in an href on the client, so the scheme is closed here too
+    if (n.uri !== undefined) {
+      if (!isStr(n.uri)) return `${at}.uri must be a string`;
+      if (!/^(obsidian:\/\/|https:\/\/)[^\s"'<>`]+$/.test(n.uri)) return `${at}.uri must be an obsidian:// or https:// url with no quotes or spaces`;
+    }
+  }
+  return null;
+}
+
+// ---------- moves ----------
+// {date, moves:{TICKER:{why, tone, sources:[{label,url}]}}}
+// tone is "up" | "down" | "flat" | "none": "none" means no explanation was
+// found, which the app must show as "no reason found" rather than inventing one.
+const MOVE_TONES = ["up", "down", "flat", "none"];
+export function validateMoves(p) {
+  if (!p || typeof p !== "object") return "payload must be a JSON object";
+  if (!DATE_RE.test(p.date || "")) return "date must be YYYY-MM-DD";
+  if (!p.moves || typeof p.moves !== "object" || isArr(p.moves)) return "moves must be an object keyed by ticker";
+  const keys = Object.keys(p.moves);
+  if (keys.length > 40) return "moves: 40 tickers max";
+  for (const k of keys) {
+    if (!TICKER_RE.test(k)) return `moves.${k}: key must match ${TICKER_RE}`;
+    const m = p.moves[k], at = `moves.${k}`;
+    if (!m || typeof m !== "object") return `${at} must be an object`;
+    if (!isStr(m.why) || !m.why.trim()) return `${at}.why required`;
+    if (m.why.length > 2000) return `${at}.why too long (2000 max)`;
+    if (m.tone !== undefined && MOVE_TONES.indexOf(m.tone) < 0) return `${at}.tone must be one of ${MOVE_TONES}`;
+    if (m.sources !== undefined) {
+      if (!isArr(m.sources)) return `${at}.sources must be an array`;
+      for (let j = 0; j < m.sources.length; j++) {
+        const s = m.sources[j];
+        if (!s || !isStr(s.label) || !s.label.trim()) return `${at}.sources[${j}].label required`;
+        if (!isStr(s.url) || !/^https:\/\//.test(s.url)) return `${at}.sources[${j}].url must be https`;
+      }
+    }
+  }
+  return null;
+}

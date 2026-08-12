@@ -8,7 +8,7 @@
 // is dropped rather than trusted.
 // v7: round 2 shipped new CSS and four rewritten modules; a phone holding v6
 // would render the new markup with the old stylesheet.
-const CACHE = "crystal-v8";
+const CACHE = "crystal-v9";
 
 const PRECACHE = [
   "./",
@@ -23,6 +23,7 @@ const PRECACHE = [
   "./money.js",
   "./career.js",
   "./listen.js",
+  "./library.js",
   "./app.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
