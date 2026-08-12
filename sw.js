@@ -8,9 +8,19 @@
 // is dropped rather than trusted.
 // v7: round 2 shipped new CSS and four rewritten modules; a phone holding v6
 // would render the new markup with the old stylesheet.
-// v10: dead-nav fix in core.js, markets day routing, library folder chips and
-// the CSS behind them. A phone on v9 would keep the dead "today" button.
-const CACHE = "crystal-v10";
+// WHEN TO BUMP: any deploy where files that must land TOGETHER changed, i.e.
+// CSS plus the markup or module that assumes it. Editing one file alone does
+// not need a bump, because the fetch handler is network-first and overwrites
+// that entry in place. The bump is what forces a synchronised cutover so a
+// client mid-update cannot serve new JS against an old stylesheet. When in
+// doubt, bump: the cost is one extra download, the cost of not bumping is a
+// phone rendering new markup with old CSS and no way to tell.
+//
+// v10: dead-nav fix in core.js, markets day routing, library folder chips.
+// v11: tribunal round 2. New .matheq / .wiki-dead / .libchips rules in the CSS
+//      land with the library.js and core.js changes that emit them, so this is
+//      exactly the paired-change case above.
+const CACHE = "crystal-v11";
 
 const PRECACHE = [
   "./",

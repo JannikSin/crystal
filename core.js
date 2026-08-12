@@ -54,7 +54,10 @@ export function pruneDated() {
 // the local tick state and the upload store all survive. Used when the key
 // changes, because a payload fetched with the old key is not this key's data.
 const PAYLOADS = ["brief.last", "brief.day.", "crystal.news.last", "crystal.markets.",
-  "crystal.career", "crystal.listen", "crystal.holdings", "crystal.quotes", "crystal.qh."];
+  "crystal.career", "crystal.listen", "crystal.holdings", "crystal.quotes", "crystal.qh.",
+  // the library is the biggest payload of all and was missing here, so changing
+  // the key left the OLD key's whole vault on the phone and its ~1 MB unreclaimable
+  "crystal.library"];
 
 export function clearPayloads() {
   try {
@@ -81,12 +84,23 @@ export function key() { return localStorage.getItem("crystal.key") || ""; }
 export function md(s) {
   s = String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  s = s.replace(/\*(?!\s)(.+?)(?<!\s)\*/g, "<em>$1</em>");
+  // Emphasis only where a * actually flanks a word, never mid-token. The old
+  // rule matched INSIDE identifiers, so an engineering note reading
+  // "sigma ~ E*alpha*deltaT" rendered as "sigma ~ E alpha deltaT": both
+  // multiplication operators eaten, silently, with the result still looking
+  // like a sentence. Same hazard in "1.4*lambda" and "0.5*UTS(T)".
+  s = s.replace(/(^|[^\w*])\*(?!\s)([^*]+?)(?<!\s)\*(?![\w*])/g, "$1<em>$2</em>");
   s = s.replace(/~~(.+?)~~/g, "<del>$1</del>");
   s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
-  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s"'<>`]+)\)/g,
+  // \u0001-\u0003 are excluded because library.js stashes wikilinks behind those
+  // sentinels and restores them AFTER this runs. A [[link]] written inside a URL
+  // otherwise survives into the href and the restore splices generated markup
+  // into an attribute position. No escape is possible from there today (the id
+  // it builds is bounded by ID_RE, alnum and hyphen only), but that bound is the
+  // only thing holding it, so keep the sentinels out of URLs.
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s"'<>`\u0001-\u0003]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  s = s.replace(/(^|[^"=>])\b(https?:\/\/[^\s<)\]"'`]+)/g,
+  s = s.replace(/(^|[^"=>])\b(https?:\/\/[^\s<)\]"'`\u0001-\u0003]+)/g,
     '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
   s = s.replace(/«([^»]+)»/g, '<span class="wiki">$1</span>');
   return s;
@@ -212,8 +226,20 @@ export function setRouter(fn) { router = fn; }
 // nothing at all. That is the "I can see today but I cannot click it" bug:
 // on Markets the day row highlights the DIGEST's date, so tapping today when
 // today is already the route was a dead button. Re-enter the router by hand.
+// The safety of this rests on an invariant nothing else enforces: the fallback
+// hash a not-found sub-route jumps to always has FEWER segments than the hash
+// that reached it, so it cannot bounce back. The latch makes that a guarantee
+// instead of a convention, because the failure mode is an unbounded synchronous
+// recursion after root.innerHTML has already been cleared, i.e. a white screen
+// on a phone with nothing in the console.
+let inRouter = false;
 export function go(hash) {
-  if (location.hash === hash) { router(); return; }
+  if (location.hash === hash) {
+    if (inRouter) return;
+    inRouter = true;
+    try { router(); } finally { inRouter = false; }
+    return;
+  }
   location.hash = hash;
 }
 

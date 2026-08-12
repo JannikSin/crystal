@@ -35,8 +35,15 @@ function load(dateOrEmpty) {
     });
 }
 
+// The date this render was requested for must still be the date on screen.
+// isTab() only checks the TAB, so a slow answer for Monday could land after the
+// user tapped today and repaint Monday, then relabel the day row to agree with
+// itself: internally consistent, wrong, and no tell. That is the exact bug this
+// file was changed to kill, coming back on one bar of signal.
+const hashDate = () => location.hash.split("/")[2] || "";
+
 function renderMarkets(data, qd, note) {
-  if (!isTab("markets")) return;
+  if (!isTab("markets") || qd !== hashDate()) return;
   root.innerHTML = "";
   const head = el("header", {});
   head.appendChild(el("div", { class: "eyebrow" }, "🔮 crystal · markets"));

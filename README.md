@@ -28,7 +28,7 @@ gave each tab its own layout language:
 - `reward.js`: the earned-fun engine, a pure function (see `tools/test_reward.mjs`).
 - `today.js` `news.js` `markets.js` `money.js` `career.js` `listen.js`: one tab each.
 - `app.js`: the router table and boot.
-- `sw.js`: offline shell cache, `crystal-v4`, precaching every file above.
+- `sw.js`: offline shell cache, precaching every file above. The cache name carries the version; sw.js itself documents when to bump it. Do not quote a number here, it goes stale the moment someone deploys.
 
 Brief payloads carry `v: 2` (a timeline). Anything without it renders through
 the old card board, so cached history days keep working.

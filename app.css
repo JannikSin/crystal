@@ -674,12 +674,17 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 .libchips {
   display: flex; gap: 7px; margin: 12px -14px 2px; padding: 2px 14px 8px;
   overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  /* The scrollbar is hidden, so without this the row looks like it ends at the
+     screen edge and the folders past it are undiscoverable. The fade is the
+     only affordance saying "keep swiping". */
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
 }
 .libchips::-webkit-scrollbar { display: none; }
 .libchip {
   flex: 0 0 auto; padding: 7px 13px; border-radius: 999px;
   background: var(--card); color: var(--dim);
-  border: 1px solid var(--line); font: inherit; font-size: .82rem; cursor: pointer;
+  border: 1px solid var(--edge); font: inherit; font-size: .82rem; cursor: pointer;
   white-space: nowrap;
 }
 .libchip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -689,7 +694,7 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 .libsearch {
   width: 100%; margin: 4px 0 14px; padding: 11px 13px;
   font: inherit; font-size: .95rem; color: var(--ink);
-  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); border: 1px solid var(--edge); border-radius: 12px;
   -webkit-appearance: none; appearance: none;
 }
 .libsearch:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -697,7 +702,7 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 .librow {
   display: block; width: 100%; text-align: left; margin-top: 8px;
   padding: 12px 14px; background: var(--card); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 13px; font: inherit; cursor: pointer;
+  border: 1px solid var(--edge); border-radius: 13px; font: inherit; cursor: pointer;
 }
 .librow:active { transform: scale(.995); }
 .librow .lt { font-weight: 620; font-size: .98rem; line-height: 1.3; }
@@ -719,30 +724,41 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 .notebody ul, .notebody ol { margin: 0 0 12px; padding-left: 22px; }
 .notebody li { margin-bottom: 6px; }
 .notebody ul ul, .notebody ol ol { margin: 6px 0 0; }
-.notebody hr { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
+.notebody hr { border: 0; border-top: 1px solid var(--hairline); margin: 20px 0; }
 .notebody code { font-family: var(--mono); font-size: .84em; }
 .notebody pre {
-  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); border: 1px solid var(--edge); border-radius: 10px;
   padding: 12px; overflow-x: auto; margin: 0 0 12px;
 }
 .notebody pre code { font-size: .78rem; line-height: 1.5; }
 .notebody .tick { font-family: var(--mono); color: var(--faint); }
 .notebody .tick.done { color: var(--up); }
 .notebody .tick.wip { color: var(--gold, var(--dim)); }
-.wikilink { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--line); }
-.wiki { color: var(--dim); }
+.wikilink { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--edge); }
+/* An unresolved [[wikilink]]: a note the pusher did not ship. NOT .wiki, which
+   is the shared guillemet pill in the base layer that every tab's md() emits;
+   naming this .wiki flattened that pill to grey text app-wide. */
+.wiki-dead { color: var(--dim); }
+/* An equation the app cannot render. Marked, not hidden, so the reader knows
+   something was there and where to go for it. */
+.matheq {
+  display: inline-block; font-family: var(--mono); font-size: .72rem;
+  padding: 1px 8px; border-radius: 6px;
+  background: var(--soft); color: var(--accent-ink); border: 1px dashed var(--soft-edge);
+}
+.matheq::before { content: "∑ "; opacity: .6; }
 
 /* tables inside a note: scroll rather than squash the page */
 table.vtable { width: 100%; border-collapse: collapse; font-size: .82rem; }
 table.vtable th, table.vtable td {
-  padding: 7px 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top;
+  padding: 7px 9px; border-bottom: 1px solid var(--hairline); text-align: left; vertical-align: top;
 }
 table.vtable th { font-weight: 650; color: var(--dim); white-space: nowrap; }
 
 /* Obsidian callouts */
 .notebody .callout {
   margin: 0 0 14px; padding: 11px 13px; border-radius: 11px;
-  background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--faint);
+  background: var(--card); border: 1px solid var(--edge); border-left: 3px solid var(--faint);
 }
 .notebody .callout .ct { font-weight: 640; margin-bottom: 6px; }
 .notebody .callout p:last-child { margin-bottom: 0; }
@@ -754,13 +770,13 @@ table.vtable th { font-weight: 650; color: var(--dim); white-space: nowrap; }
 .obsidian {
   display: inline-block; margin: 18px 0 4px; padding: 9px 14px;
   font-size: .82rem; color: var(--dim); text-decoration: none;
-  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); border: 1px solid var(--edge); border-radius: 999px;
 }
 
 /* why a ticker moved, on the Money detail */
 .whymoved {
   margin: 12px 0 4px; padding: 11px 13px; background: var(--card);
-  border: 1px solid var(--line); border-left: 3px solid var(--faint); border-radius: 11px;
+  border: 1px solid var(--edge); border-left: 3px solid var(--faint); border-radius: 11px;
   font-size: .87rem; line-height: 1.55;
 }
 .whymoved.down { border-left-color: var(--down); }

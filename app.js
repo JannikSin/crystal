@@ -27,6 +27,10 @@ function route() {
     go("#/today");
     return;
   }
+  // An unknown tab used to fall through to today.open() while the hash still
+  // read #/foo, so today's own isTab() guard dropped the paint and left a blank
+  // page under a highlighted tab bar. Rewrite the hash instead of retargeting.
+  if (parts[0] && !ROUTES[parts[0]]) { go("#/today"); return; }
   const tab = ROUTES[parts[0]] ? parts[0] : "today";
   tabbar.querySelectorAll("button").forEach((b) => {
     b.setAttribute("aria-current", b.getAttribute("data-tab") === tab ? "true" : "false");
