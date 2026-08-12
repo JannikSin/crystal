@@ -208,7 +208,14 @@ export function loadCached(path, cacheKey, render, force) {
 // key screen. Set once at boot.
 let router = () => {};
 export function setRouter(fn) { router = fn; }
-export function go(hash) { location.hash = hash; }
+// Assigning the hash it already has fires no hashchange, so the tap does
+// nothing at all. That is the "I can see today but I cannot click it" bug:
+// on Markets the day row highlights the DIGEST's date, so tapping today when
+// today is already the route was a dead button. Re-enter the router by hand.
+export function go(hash) {
+  if (location.hash === hash) { router(); return; }
+  location.hash = hash;
+}
 
 // Every tab fetches on its own clock, so a slow answer can land after the user
 // has walked to another tab. Renderers check this first and drop the paint.

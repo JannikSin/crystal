@@ -26,7 +26,14 @@ function load(force) {
   library = lsGet("crystal.library", null);
   if (library && !force) renderIndex("");
   api("/library")
-    .then((data) => { library = data; lsSet("crystal.library", data); renderIndex(""); })
+    .then((data) => {
+      library = data;
+      // The vault is the biggest payload the phone holds and the origin is
+      // shared with the other PWAs. A refused write means no offline reading,
+      // which is the whole point of this tab, so it is said out loud.
+      const cached = lsSet("crystal.library", data);
+      renderIndex(cached ? "" : "Too big to save on this phone. The notes are here now, but they will not be readable offline.");
+    })
     .catch((e) => {
       if (e === "auth") return;
       if (e === "empty") { renderIndex("", true); return; }
@@ -216,6 +223,15 @@ function renderIndex(note, noLibrary) {
     return;
   }
 
+  // Folder chips. With 48 notes the index is longer than a phone screen, so
+  // "where are the papers" was a scroll hunt. One tap now answers it.
+  const allFolders = [];
+  notes().forEach((n) => { if (allFolders.indexOf(n.folder) < 0) allFolders.push(n.folder); });
+  let picked = lsGet("crystal.libFolder", "");
+  if (picked && allFolders.indexOf(picked) < 0) picked = "";
+  const chips = el("div", { class: "libchips", role: "tablist", "aria-label": "Folder" });
+  root.appendChild(chips);
+
   const q = el("input", {
     class: "libsearch", type: "search", placeholder: "Filter notes…",
     "aria-label": "Filter notes", autocapitalize: "none", autocorrect: "off",
@@ -225,11 +241,26 @@ function renderIndex(note, noLibrary) {
   const listWrap = el("div", { class: "libtree" });
   root.appendChild(listWrap);
 
+  const drawChips = () => {
+    chips.innerHTML = "";
+    [""].concat(allFolders).forEach((f) => {
+      const b = el("button", { type: "button", class: "libchip", "aria-current": f === picked ? "true" : "false" },
+        md(f || "All"));
+      b.addEventListener("click", () => {
+        picked = picked === f ? "" : f;
+        lsSet("crystal.libFolder", picked);
+        drawChips();
+        draw(q.value);
+      });
+      chips.appendChild(b);
+    });
+  };
+
   const draw = (filter) => {
     listWrap.innerHTML = "";
     const f = filter.trim().toLowerCase();
-    const hits = notes().filter((n) => !f ||
-      (n.title + " " + (n.summary || "") + " " + n.folder + " " + n.body).toLowerCase().indexOf(f) >= 0);
+    const hits = notes().filter((n) => (!picked || n.folder === picked) && (!f ||
+      (n.title + " " + (n.summary || "") + " " + n.folder + " " + n.body).toLowerCase().indexOf(f) >= 0));
     if (!hits.length) {
       listWrap.appendChild(el("p", { class: "empty" }, "Nothing matches that."));
       return;
@@ -253,6 +284,7 @@ function renderIndex(note, noLibrary) {
       listWrap.appendChild(sec);
     });
   };
+  drawChips();
   draw(lsGet("crystal.libFilter", ""));
   q.value = lsGet("crystal.libFilter", "");
   q.addEventListener("input", () => { lsSet("crystal.libFilter", q.value); draw(q.value); });

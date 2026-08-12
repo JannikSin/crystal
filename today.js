@@ -70,7 +70,10 @@ function loadToday(force) {
     .catch((e) => {
       if (e === "auth") return;
       if (e === "empty") {
-        if (!brief) render("", "No brief has been pushed yet. It lands with the morning build.");
+        // force=true skipped the cached paint, so returning here left the
+        // PREVIOUS day still on screen and the tap on "today" looked dead.
+        // Always paint: the cached brief is what "latest" means right now.
+        render("", brief ? "" : "No brief has been pushed yet. It lands with the morning build.");
         return;
       }
       if (brief) render("Offline. Showing the last cached brief.");

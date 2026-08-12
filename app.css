@@ -670,6 +670,22 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 }
 
 /* ---------- library: the vault, read on the phone ---------- */
+/* Folder chips: one horizontal scroller, same gesture as the day switcher. */
+.libchips {
+  display: flex; gap: 7px; margin: 12px -14px 2px; padding: 2px 14px 8px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.libchips::-webkit-scrollbar { display: none; }
+.libchip {
+  flex: 0 0 auto; padding: 7px 13px; border-radius: 999px;
+  background: var(--card); color: var(--dim);
+  border: 1px solid var(--line); font: inherit; font-size: .82rem; cursor: pointer;
+  white-space: nowrap;
+}
+.libchip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) {
+  .libchip[aria-current="true"] { color: #16141f; }
+}
 .libsearch {
   width: 100%; margin: 4px 0 14px; padding: 11px 13px;
   font: inherit; font-size: .95rem; color: var(--ink);

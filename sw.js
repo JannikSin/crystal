@@ -8,7 +8,9 @@
 // is dropped rather than trusted.
 // v7: round 2 shipped new CSS and four rewritten modules; a phone holding v6
 // would render the new markup with the old stylesheet.
-const CACHE = "crystal-v9";
+// v10: dead-nav fix in core.js, markets day routing, library folder chips and
+// the CSS behind them. A phone on v9 would keep the dead "today" button.
+const CACHE = "crystal-v10";
 
 const PRECACHE = [
   "./",

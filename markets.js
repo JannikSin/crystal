@@ -44,14 +44,20 @@ function renderMarkets(data, qd, note) {
   root.appendChild(head);
 
   const current = qd || (data ? data.date : todayIso());
-  root.appendChild(renderDays(current, (dOrEmpty, iso) => go("#/markets" + (dOrEmpty ? "/" + iso : ""))));
+  // Always route to the explicit date, today included. Routing today to the
+  // bare "latest" hash re-served whatever digest happened to be newest, so on
+  // a night the pipeline missed, tapping today silently redisplayed yesterday.
+  // Asking for the date says "nothing was pushed" instead of lying quietly.
+  root.appendChild(renderDays(current, (dOrEmpty, iso) => go("#/markets/" + iso)));
 
   if (note) root.appendChild(el("div", { class: "banner" }, note));
 
   if (!data) {
-    root.appendChild(emptyState("📈", qd ? "No digest for this day" : "No digest yet",
-      qd ? "Nothing was pushed on " + md(qd) + ". Weekends and holidays have no edition."
-         : "The evening edition lands after market close, once the digest pipeline pushes."));
+    const isToday = qd === todayIso();
+    root.appendChild(emptyState("📈", isToday ? "Not written yet" : qd ? "No digest for this day" : "No digest yet",
+      isToday ? "Tonight's edition has not been pushed. It lands about 30 minutes after the close, and a missed run leaves this empty rather than showing you yesterday."
+      : qd ? "Nothing was pushed on " + md(qd) + ". Weekends and holidays have no edition."
+           : "The evening edition lands after market close, once the digest pipeline pushes."));
     root.appendChild(appFooter(() => load(qd)));
     return;
   }
