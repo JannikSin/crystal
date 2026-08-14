@@ -90,6 +90,7 @@ const MAX_BODY = 1024 * 1024;
 // encoded caps per route, checked on content-length before anything is read
 const BODY_CAP = { "/scan": 2 * 1024 * 1024, "/answer": 6 * 1024 * 1024 };
 const BLOB_TTL = 14 * 24 * 3600;
+const DESK_TTL = 30 * 24 * 3600; // backstop for un-drained desk: / deskapprove: keys
 const AUDIO_TYPES = ["audio/mp4", "audio/m4a", "audio/aac", "audio/webm"];
 const QUOTE_TTL = 15 * 60 * 1000;
 const HIST_TTL = 24 * 60 * 60 * 1000;
@@ -365,7 +366,11 @@ export default {
       return json(403, { error: "laptop key required for this route" });
 
     const qdate = url.searchParams.get("date") || "";
-    if (qdate && !DATE_RE.test(qdate)) return json(400, { error: "bad date" });
+    // POST /desk must be incapable of any 4xx but 401 (sync.js drops the queue
+    // head on any 4xx), so it is exempt from the shared bad-date gate; it
+    // reads no date anyway.
+    if (qdate && !DATE_RE.test(qdate) && !(path === "/desk" && method === "POST"))
+      return json(400, { error: "bad date" });
 
     // ---------- brief ----------
     if (path === "/brief" && method === "GET") {
@@ -490,7 +495,11 @@ export default {
         .join("");
       const id = `d-${d.toISOString().slice(0, 10).replace(/-/g, "")}-${rand}`;
       const note = { id, text: clip(text, 8000), at: at || d.toISOString(), via: who };
-      await env.STORE.put(`desk:${id}`, JSON.stringify(note));
+      // 30-day backstop TTL: the drain normally consumes within the hour, but
+      // if it dies (the standing wire-automation failure class) raw notes must
+      // not accumulate in KV forever behind one key (Lawyer). The doctor
+      // complains long before this fires.
+      await env.STORE.put(`desk:${id}`, JSON.stringify(note), { expirationTtl: DESK_TTL });
       return json(200, { ok: true, id });
     }
 
@@ -537,7 +546,9 @@ export default {
       for (const w of wanted) if (sameKey(secret, w)) okSecret = true;
       if (!wanted.length || !okSecret) return json(403, { error: "bad approve secret" });
       const rec = { id, approve: body?.approve !== false, at: new Date().toISOString(), via: who };
-      await env.STORE.put(`deskapprove:${id}`, JSON.stringify(rec));
+      // TTL so approval records (an id list, no secret) do not grow forever;
+      // nothing in lane 8a consumes them (Lawyer).
+      await env.STORE.put(`deskapprove:${id}`, JSON.stringify(rec), { expirationTtl: DESK_TTL });
       return json(200, { ok: true, id, approve: rec.approve });
     }
 

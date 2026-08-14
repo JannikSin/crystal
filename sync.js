@@ -69,11 +69,15 @@ export function queueDesk(text) {
   const item = { type: "desk", date: todayIso(), text, at: nowIso() };
   const q = lsGet("brief.queue", []);
   q.push(item);
-  lsSet("brief.queue", q);
+  const queued = lsSet("brief.queue", q);
   const notes = lsGet("desk.notes." + item.date, []);
   notes.push({ text, at: item.at, sent: false });
   lsSet("desk.notes." + item.date, notes);
   flush();
+  // storage refused the write (full, or Safari private mode): the note never
+  // reached the queue, so say so instead of flashing "on the desk" over a
+  // silent loss (Usability). Same guard setTick already carries.
+  return queued;
 }
 
 function markDeskSent(d) {
