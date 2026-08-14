@@ -11,8 +11,9 @@ import * as money from "./money.js";
 import * as career from "./career.js";
 import * as listen from "./listen.js";
 import * as library from "./library.js";
+import * as desk from "./desk.js";
 
-const ROUTES = { today, news, markets, money, career, listen, library };
+const ROUTES = { today, news, markets, money, career, listen, library, desk };
 
 function route() {
   if (!key()) { keyScreen(""); return; }

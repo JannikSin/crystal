@@ -62,6 +62,28 @@ export function queueCapture(text) {
   flush();
 }
 
+// The Desk inbox rides the same FIFO pump. The Worker's /desk route never
+// returns any 4xx but 401, so the drop-the-head rule below can never eat a
+// Desk note the way a validation 400 would.
+export function queueDesk(text) {
+  const item = { type: "desk", date: todayIso(), text, at: nowIso() };
+  const q = lsGet("brief.queue", []);
+  q.push(item);
+  lsSet("brief.queue", q);
+  const notes = lsGet("desk.notes." + item.date, []);
+  notes.push({ text, at: item.at, sent: false });
+  lsSet("desk.notes." + item.date, notes);
+  flush();
+}
+
+function markDeskSent(d) {
+  const notes = lsGet("desk.notes." + d.date, []);
+  notes.forEach((n) => { if (n.at === d.at && n.text === d.text) n.sent = true; });
+  lsSet("desk.notes." + d.date, notes);
+  const list = document.getElementById("desklist");
+  if (list) list.dispatchEvent(new CustomEvent("desk-changed"));
+}
+
 export const readSetOf = (date) => lsGet("crystal.read." + date, []);
 
 export function markRead(date, ids) {
@@ -102,8 +124,9 @@ export function flush() {
   if (!navigator.onLine) { syncStamp(q.length + " waiting for signal"); return; }
   flushing = true;
   const d = q[0];
-  const path = d.type === "capture" ? "/capture" : d.type === "newsread" ? "/newsread" : "/ticks";
-  const body = d.type === "capture" ? { date: d.date, text: d.text, at: d.at }
+  const path = d.type === "capture" ? "/capture" : d.type === "newsread" ? "/newsread"
+    : d.type === "desk" ? "/desk" : "/ticks";
+  const body = d.type === "capture" || d.type === "desk" ? { date: d.date, text: d.text, at: d.at }
     : d.type === "newsread" ? { date: d.date, ids: d.ids }
     : d;
   fetch(WORKER + path, {
@@ -121,6 +144,7 @@ export function flush() {
       q2.shift();
       lsSet("brief.queue", q2);
       if (r.ok && d.type === "capture") markCapSent(d);
+      if (r.ok && d.type === "desk") markDeskSent(d);
       flush();
     } else {
       syncStamp(q.length + " not synced (" + r.status + ")");

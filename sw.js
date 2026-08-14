@@ -20,7 +20,9 @@
 // v11: tribunal round 2. New .matheq / .wiki-dead / .libchips rules in the CSS
 //      land with the library.js and core.js changes that emit them, so this is
 //      exactly the paired-change case above.
-const CACHE = "crystal-v11";
+// v12: the Desk tab. New desk.js module plus the index.html tab button and the
+//      sync.js desk queue type must land together or the router 404s the tab.
+const CACHE = "crystal-v12";
 
 const PRECACHE = [
   "./",
@@ -36,6 +38,7 @@ const PRECACHE = [
   "./career.js",
   "./listen.js",
   "./library.js",
+  "./desk.js",
   "./app.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
