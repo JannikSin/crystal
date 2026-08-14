@@ -20,7 +20,10 @@
 // v11: tribunal round 2. New .matheq / .wiki-dead / .libchips rules in the CSS
 //      land with the library.js and core.js changes that emit them, so this is
 //      exactly the paired-change case above.
-const CACHE = "crystal-v11";
+// v12: the Shop tab. New module (shopping.js), new tab button in index.html and
+//      new .aislesec/.buyrow rules in the CSS, all three of which must land
+//      together or the tab renders unstyled against a stale shell.
+const CACHE = "crystal-v12";
 
 const PRECACHE = [
   "./",
@@ -34,6 +37,7 @@ const PRECACHE = [
   "./markets.js",
   "./money.js",
   "./career.js",
+  "./shopping.js",
   "./listen.js",
   "./library.js",
   "./app.js",

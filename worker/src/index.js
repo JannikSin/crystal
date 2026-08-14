@@ -63,6 +63,7 @@ import {
   validateBriefV2,
   validateListen,
   validateCareer,
+  validateShopping,
   validateFeedback,
   DATE_RE,
   TICKER_RE,
@@ -600,6 +601,22 @@ export default {
       if (bad) return json(400, { error: bad });
       await env.STORE.put("career:latest", raw);
       return json(200, { ok: true, roster: body.roster.length });
+    }
+
+    if (path === "/shopping" && method === "GET") {
+      const raw = await env.STORE.get("shopping:latest");
+      if (!raw) return json(404, { error: "no shopping list yet" });
+      return raw200(raw);
+    }
+
+    if (path === "/shopping" && method === "POST") {
+      const { raw, body, err } = await readBody(request);
+      if (err) return err;
+      const bad = validateShopping(body);
+      if (bad) return json(400, { error: bad });
+      await env.STORE.put("shopping:latest", raw);
+      const n = body.sections.reduce((a, s) => a + s.items.length, 0);
+      return json(200, { ok: true, sections: body.sections.length, items: n });
     }
 
     // ---------- scan: yesterday's handwritten list, raw JPEG ----------

@@ -6,5 +6,7 @@ node_modules/
 # dropped here by mistake, and the scan/answer test images
 holdings.json
 brief_key.txt
+phone_key.txt
+*key.txt
 *.jpg
 *.jpeg

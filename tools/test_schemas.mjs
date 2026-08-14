@@ -12,6 +12,7 @@ import {
   validateBriefV2,
   validateListen,
   validateCareer,
+  validateShopping,
   validateFeedback,
   ID_RE,
 } from "../worker/src/validate.js";
@@ -340,6 +341,73 @@ assert.match(
 assert.match(
   validateFeedback({ date: "2026-08-08", items: [{ ...goodFeedback.items[0], workshop: 3 }] }),
   /workshop/,
+);
+
+// ---------- shopping ----------
+const goodShop = {
+  built: "2026-08-14T10:00:00-05:00",
+  sections: [{
+    title: "Supplements, all out or low",
+    status: "buy",
+    note: "ungated",
+    items: [
+      { name: "Magnesium glycinate", price: 15, priceText: "~$15",
+        desc: "Glycinate only, never oxide.", spec: "200 mg elemental",
+        url: "https://www.amazon.com/s?k=magnesium+glycinate" },
+      // no price at all: the "free, wear a hat" row must stay legal
+      { name: "A brimmed hat and a sleeved shirt" },
+    ],
+  }],
+  totals: [{ label: "Buy now", amount: 15 }],
+};
+assert.strictEqual(validateShopping(goodShop), null, "the good shopping fixture must pass");
+assert.strictEqual(
+  validateShopping({ built: "x", sections: [{ title: "t", status: "blocked", items: [] }] }),
+  null,
+  "an empty section in a legal status is fine",
+);
+assert.match(validateShopping({ sections: [] }), /built/);
+assert.match(validateShopping({ built: "x", sections: {} }), /sections must be an array/);
+assert.match(
+  validateShopping({ built: "x", sections: [{ title: "t", status: "maybe", items: [] }] }),
+  /status must be one of/,
+  "an unknown status must be refused, not rendered as an uncoloured row",
+);
+assert.match(
+  validateShopping({ built: "x", sections: [{ title: "", status: "buy", items: [] }] }),
+  /title/,
+);
+assert.match(
+  validateShopping({ built: "x", sections: [{ title: "t", status: "buy", items: [{ name: "" }] }] }),
+  /name/,
+);
+assert.match(
+  validateShopping({ built: "x", sections: [{ title: "t", status: "buy",
+    items: [{ name: "n", price: "15" }] }] }),
+  /price must be a number/,
+  "a stringy price would break the running total silently",
+);
+// the href guards: the URL is the one payload value that lands in an attribute
+assert.match(
+  validateShopping({ built: "x", sections: [{ title: "t", status: "buy",
+    items: [{ name: "n", url: "http://x.com" }] }] }),
+  /url must be https/,
+);
+assert.match(
+  validateShopping({ built: "x", sections: [{ title: "t", status: "buy",
+    items: [{ name: "n", url: 'https://x.com/"onmouseover=alert(1)' }] }] }),
+  /quotes, angle brackets or spaces/,
+  "a quote in the URL could close the href attribute",
+);
+assert.match(
+  validateShopping({ built: "x", sections: [{ title: "t", status: "buy",
+    items: [{ name: "n", url: "javascript:alert(1)" }] }] }),
+  /url must be https/,
+);
+assert.match(
+  validateShopping({ built: "x", sections: [{ title: "t", status: "buy", items: [] }],
+    totals: [{ label: "x", amount: "5" }] }),
+  /amount must be a number/,
 );
 
 console.log("test_schemas: all assertions passed");

@@ -433,3 +433,60 @@ export function validateMoves(p) {
   }
   return null;
 }
+
+// ---------- shopping ----------
+// {built, sections:[{title, status, note?, items:[{name, price?, priceText?,
+//   desc?, url?, spec?}]}], totals?:{label, amount}[]}
+// status is a closed set because shopping.js colours and orders on it; an
+// unknown status would render as an uncoloured row that looks like a bug.
+const SHOP_STATUS = ["buy", "queued", "held", "blocked", "never", "got"];
+
+function validateShopItem(it, at) {
+  if (!it || typeof it !== "object") return `${at} must be an object`;
+  if (!isTxt(it.name)) return `${at}.name required`;
+  // price is optional (a "free, wear a hat" line has none) but when present it
+  // must be a real number, because the tab sums it
+  if (it.price !== undefined && it.price !== null && !isNum(it.price))
+    return `${at}.price must be a number or omitted`;
+  if (it.priceText !== undefined && !isStr(it.priceText)) return `${at}.priceText must be a string`;
+  if (it.desc !== undefined && !isStr(it.desc)) return `${at}.desc must be a string`;
+  if (it.spec !== undefined && !isStr(it.spec)) return `${at}.spec must be a string`;
+  // The URL lands in an href. https only, and no quote/angle/backtick that
+  // could close the attribute if a renderer ever built this by hand.
+  if (it.url !== undefined && it.url !== null) {
+    if (!isHttps(it.url)) return `${at}.url must be https`;
+    if (/["'<>`\s]/.test(it.url)) return `${at}.url must not contain quotes, angle brackets or spaces`;
+  }
+  return null;
+}
+
+export function validateShopping(p) {
+  if (!p || typeof p !== "object") return "payload must be a JSON object";
+  if (!isStr(p.built)) return "built (ISO timestamp string) required";
+  if (!isArr(p.sections)) return "sections must be an array";
+  if (p.sections.length > 30) return "sections: more than 30, that is not a shopping list";
+  for (let i = 0; i < p.sections.length; i++) {
+    const s = p.sections[i], at = `sections[${i}]`;
+    if (!s || typeof s !== "object") return `${at} must be an object`;
+    if (!isTxt(s.title)) return `${at}.title required`;
+    if (!SHOP_STATUS.includes(s.status))
+      return `${at}.status must be one of ${SHOP_STATUS.join(", ")}`;
+    if (s.note !== undefined && !isStr(s.note)) return `${at}.note must be a string`;
+    if (!isArr(s.items)) return `${at}.items must be an array`;
+    if (s.items.length > 60) return `${at}.items: more than 60 in one section`;
+    for (let j = 0; j < s.items.length; j++) {
+      const bad = validateShopItem(s.items[j], `${at}.items[${j}]`);
+      if (bad) return bad;
+    }
+  }
+  if (p.totals !== undefined && p.totals !== null) {
+    if (!isArr(p.totals)) return "totals must be an array";
+    for (let i = 0; i < p.totals.length; i++) {
+      const t = p.totals[i];
+      if (!t || typeof t !== "object") return `totals[${i}] must be an object`;
+      if (!isTxt(t.label)) return `totals[${i}].label required`;
+      if (!isNum(t.amount)) return `totals[${i}].amount must be a number`;
+    }
+  }
+  return null;
+}

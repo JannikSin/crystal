@@ -784,3 +784,79 @@ table.vtable th { font-weight: 650; color: var(--dim); white-space: nowrap; }
 .whymoved .wh { font-family: var(--mono); font-size: .68rem; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
 .whymoved .wsrc { margin-top: 7px; font-size: .78rem; }
 .whymoved .wsrc a { color: var(--accent); margin-right: 10px; }
+
+/* ------------------------------------------------------------------ shop -- */
+/* THE AISLE. A list you hold in a shop: big tap targets, price hard right,
+   one tap opens the row in place. Same disclosure pattern as .specrow on
+   Career, sized up because this one gets used one-handed while walking. */
+header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
+
+/* the only number that matters standing in an aisle: what is still unticked */
+.runtot{position:sticky;top:0;z-index:5;display:flex;align-items:baseline;gap:10px;
+  margin:14px -14px 0;padding:9px 14px;background:var(--glass);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
+.runtot .n{font-family:var(--mono);font-size:.62rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dim)}
+.runtot .v{margin-left:auto;font-family:var(--mono);font-size:.95rem;color:var(--ink)}
+
+.aislesec{margin-top:22px}
+.aislesec .sh{display:flex;align-items:center;gap:9px;font-family:var(--mono);
+  font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);
+  padding-bottom:6px;border-bottom:1px solid var(--edge)}
+.aislesec .sh .t{color:var(--dim)}
+.aislesec .sh .chip{margin-left:auto;flex:0 0 auto;padding:2px 8px;border-radius:99px;
+  border:1px solid var(--edge);letter-spacing:.12em}
+.aislesec.s-buy .sh .chip{color:var(--accent);border-color:var(--soft-edge);background:var(--soft)}
+.aislesec.s-held .sh .chip,.aislesec.s-blocked .sh .chip{color:var(--warn);
+  border-color:var(--warnbg);background:var(--warnbg)}
+.aislesec.s-never .sh .chip{color:var(--down);border-color:var(--downbg);background:var(--downbg)}
+.aislesec.s-got .sh .chip{color:var(--up);border-color:var(--upbg);background:var(--upbg)}
+.secnote{margin:8px 0 0;font-size:.82rem;color:var(--dim);line-height:1.45}
+
+.buyrow{border-bottom:1px solid var(--hairline)}
+.buyrow .ln{display:flex;align-items:stretch;gap:2px}
+/* the tick is its own control so the row tap stays "tell me more" */
+.buyrow .tk{flex:0 0 42px;display:flex;align-items:center;justify-content:center;
+  background:none;border:none;cursor:pointer;padding:0;color:var(--faint)}
+.buyrow .tk svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2.4;
+  stroke-linecap:round;stroke-linejoin:round;opacity:.25}
+.buyrow .tk[aria-pressed="true"] svg{opacity:1;stroke:var(--up)}
+.buyrow .tk:active{background:var(--press);border-radius:10px}
+.buyrow .hd{flex:1;display:flex;align-items:baseline;gap:10px;min-width:0;
+  background:none;border:none;cursor:pointer;text-align:left;
+  padding:13px 2px 13px 0;color:var(--ink);font:inherit}
+.buyrow .hd:active{background:var(--press)}
+.buyrow .hd .nm{font-family:var(--serif);font-size:1.02rem;font-weight:600;min-width:0;
+  overflow-wrap:anywhere}
+.buyrow .hd .pr{margin-left:auto;flex:0 0 auto;font-family:var(--mono);font-size:.84rem;
+  color:var(--dim)}
+.buyrow .hd .car{flex:0 0 auto;color:var(--faint);transition:transform .16s ease;
+  font-size:1.1rem;line-height:1}
+.buyrow.open .hd .car{transform:rotate(90deg)}
+/* ticked rows recede but stay readable: you still need to see what is in the
+   basket, so this is never display:none and never a colour-only signal */
+.buyrow.done .hd .nm{text-decoration:line-through;color:var(--faint)}
+.buyrow.done .hd .pr{color:var(--faint)}
+
+.buyrow .more{padding:0 2px 15px 42px}
+.buyrow .more .spec{font-family:var(--mono);font-size:.7rem;letter-spacing:.04em;
+  color:var(--accent-ink);background:var(--soft);border:1px solid var(--soft-edge);
+  border-radius:8px;padding:7px 10px;margin-bottom:9px;line-height:1.5;
+  overflow-wrap:anywhere}
+.buyrow .more p{margin:0 0 9px;font-size:.88rem;color:var(--dim);line-height:1.5}
+.buyrow .more .go{display:inline-block;font-family:var(--mono);font-size:.68rem;
+  letter-spacing:.14em;text-transform:uppercase;text-decoration:none;
+  color:var(--accent);border:1px solid var(--soft-edge);background:var(--soft);
+  border-radius:99px;padding:7px 14px}
+
+.totals{margin-top:26px;border-top:1px solid var(--edge);padding-top:12px}
+.totals .sh{font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+.totals .trow{display:flex;align-items:baseline;gap:12px;padding:6px 0}
+.totals .trow .l{font-size:.88rem;color:var(--dim)}
+.totals .trow .v{margin-left:auto;font-family:var(--mono);font-size:.92rem;color:var(--ink)}
+
+@media(prefers-color-scheme:dark){
+  .buyrow .tk[aria-pressed="true"] svg{stroke:var(--up)}
+}

@@ -55,6 +55,9 @@ export function pruneDated() {
 // changes, because a payload fetched with the old key is not this key's data.
 const PAYLOADS = ["brief.last", "brief.day.", "crystal.news.last", "crystal.markets.",
   "crystal.career", "crystal.listen", "crystal.holdings", "crystal.quotes", "crystal.qh.",
+  // the shop list. The CART (crystal.cart) is deliberately not here: it is the
+  // user's own taps, not a payload fetched with a key.
+  "crystal.shopping",
   // the library is the biggest payload of all and was missing here, so changing
   // the key left the OLD key's whole vault on the phone and its ~1 MB unreclaimable
   "crystal.library"];
@@ -341,7 +344,14 @@ export function forgetPhone() {
   } catch (e) {}
   try { indexedDB.deleteDatabase("crystal"); } catch (e) {}
   if (window.caches) {
-    caches.keys().then((ks) => Promise.all(ks.map((k) => caches.delete(k)))).catch(() => {});
+    // Own prefix ONLY. The sibling PWAs (brief, bonmot, grandstand, tally,
+    // finesse) share janniksin.github.io, so a blanket sweep here evicts their
+    // offline shells too and they will not open without signal. sw.js:62 filters
+    // correctly; this call did not, and forgetting one phone quietly broke five
+    // apps on the train. Found by council review 2026-08-13.
+    caches.keys()
+      .then((ks) => Promise.all(ks.filter((k) => k.startsWith("crystal-")).map((k) => caches.delete(k))))
+      .catch(() => {});
   }
   setTimeout(() => location.reload(), 250);
 }
