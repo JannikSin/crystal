@@ -89,7 +89,21 @@ const CORS = {
 };
 const MAX_BODY = 1024 * 1024;
 // encoded caps per route, checked on content-length before anything is read
-const BODY_CAP = { "/scan": 2 * 1024 * 1024, "/answer": 6 * 1024 * 1024 };
+//
+// /library outgrew the default 1 MiB on 2026-08-14 and every push since was
+// refused, which is a SILENT staleness bug: the pusher exits non-zero, the
+// Worker keeps serving the last payload that fit, and the Library tab looks
+// perfectly healthy while showing a two-day-old vault. KV values may be 25 MiB,
+// so the ceiling here was never the storage, it was this constant.
+// The real remaining ceiling is the PHONE: library.js caches the whole payload
+// in localStorage on an origin shared with five other PWAs. push_library.py
+// warns well below this number for that reason.
+const BODY_CAP = {
+  "/scan": 2 * 1024 * 1024,
+  "/answer": 6 * 1024 * 1024,
+  "/deskaudio": 6 * 1024 * 1024,
+  "/library": 4 * 1024 * 1024,
+};
 const BLOB_TTL = 14 * 24 * 3600;
 const DESK_TTL = 30 * 24 * 3600; // backstop for un-drained desk: / deskapprove: keys
 const AUDIO_TYPES = ["audio/mp4", "audio/m4a", "audio/aac", "audio/webm"];
@@ -146,9 +160,9 @@ function role(request, env) {
 
 // The phone reads everything it renders and writes only what the user taps.
 // It never pushes a payload, never touches raw answer audio, never deletes.
-const PHONE_POST = ["/ticks", "/capture", "/newsread", "/scan", "/answer", "/desk", "/deskapprove"];
+const PHONE_POST = ["/ticks", "/capture", "/newsread", "/scan", "/answer", "/desk", "/deskapprove", "/deskaudio"];
 function phoneAllowed(method, path) {
-  if (method === "GET") return path !== "/answer";
+  if (method === "GET") return path !== "/answer" && path !== "/deskaudio";
   if (method === "POST") return PHONE_POST.includes(path);
   return false;
 }
@@ -665,7 +679,10 @@ export default {
     }
 
     if (path === "/library" && method === "POST") {
-      const { raw, body, err } = await readBody(request);
+      // capFor, not the default: BODY_CAP raises /library above the 1 MiB that
+      // every other JSON route is fine with. readBody cannot see `path`, so the
+      // cap is passed here. Any future oversized route needs this same line.
+      const { raw, body, err } = await readBody(request, capFor(path));
       if (err) return err;
       const bad = validateLibrary(body);
       if (bad) return json(400, { error: bad });
@@ -838,6 +855,61 @@ export default {
         const items = (await answerIndex(env, qdate)).filter((i) => i && i.qid !== qid);
         await putAnswerIndex(env, qdate, items);
         return json(200, { ok: true, date: qdate, qid, remaining: items.length });
+      }
+    }
+
+    // ---------- deskaudio: a spoken Desk note, raw audio ----------
+    // The interview recorder's exact infrastructure pointed at the Desk
+    // (David, 2026-08-16: "you already have it for the interview question,
+    // make it the same exact thing"). Phone POSTs bytes; the hourly drain
+    // lists, transcribes with the same faster-whisper, files the transcript
+    // through the normal note triage, and DELETEs. 14-day TTL backstop.
+    if (path === "/deskaudio") {
+      if (method === "POST") {
+        const { buf, ct, err } = await readBlob(request, capFor(path), AUDIO_TYPES);
+        if (err) return err;
+        const d = new Date();
+        const rand = [...crypto.getRandomValues(new Uint8Array(4))]
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+        const id = `da-${d.toISOString().slice(0, 10).replace(/-/g, "")}-${rand}`;
+        await env.STORE.put(`deskaudio:${id}`, buf, { expirationTtl: BLOB_TTL });
+        await env.STORE.put(`deskaudiometa:${id}`,
+          JSON.stringify({ id, bytes: buf.byteLength, type: ct, at: d.toISOString() }),
+          { expirationTtl: BLOB_TTL });
+        return json(200, { ok: true, id, bytes: buf.byteLength });
+      }
+
+      // laptop only past here: the phone allowlist blocks GET and DELETE
+      const id = url.searchParams.get("id") || "";
+      if (id && !ID_RE.test(id)) return json(400, { error: "bad id" });
+
+      if (method === "GET" && !id) {
+        const list = await env.STORE.list({ prefix: "deskaudiometa:", limit: 100 });
+        const items = [];
+        for (const k of list.keys) {
+          try {
+            items.push(JSON.parse(await env.STORE.get(k.name)));
+          } catch {}
+        }
+        return json(200, { items: items.filter(Boolean) });
+      }
+
+      if (method === "GET") {
+        const buf = await env.STORE.get(`deskaudio:${id}`, "arrayBuffer");
+        if (!buf) return json(404, { error: "no audio for that id" });
+        let type = "audio/mp4";
+        try {
+          type = JSON.parse((await env.STORE.get(`deskaudiometa:${id}`)) || "{}").type || type;
+        } catch {}
+        return bytes200(buf, type);
+      }
+
+      if (method === "DELETE") {
+        if (!id) return json(400, { error: "id required" });
+        await env.STORE.delete(`deskaudio:${id}`);
+        await env.STORE.delete(`deskaudiometa:${id}`);
+        return json(200, { ok: true, id });
       }
     }
 

@@ -30,7 +30,8 @@
 //      history-day feedback pull in today.js.
 // v17: the bubble (app.js + .bubble CSS), Career reps archive (career.js +
 //      .repslist CSS), grades moved off the Today board. Paired changes.
-const CACHE = "crystal-v17";
+// v18: the mic in the bubble (app.js + .mic CSS, sync.js deskaudio kind).
+const CACHE = "crystal-v18";
 
 const PRECACHE = [
   "./",

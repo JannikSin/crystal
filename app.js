@@ -3,7 +3,7 @@
 // decides which one gets the screen.
 
 import { root, tabbar, key, keyScreen, setRouter, go, el } from "./core.js";
-import { flush, flushUploads, queueDesk } from "./sync.js";
+import { flush, flushUploads, queueDesk, uploadEnqueue } from "./sync.js";
 import * as today from "./today.js";
 import * as news from "./news.js";
 import * as markets from "./markets.js";
@@ -71,6 +71,46 @@ bsend.addEventListener("click", () => {
   bstat.textContent = "captured, files within the hour";
   setTimeout(() => { bstat.textContent = ""; panel.hidden = true; }, 1600);
 });
+// The mic: the interview recorder's exact pattern (MediaRecorder, offline
+// upload queue), pointed at /deskaudio. The drain transcribes with the same
+// faster-whisper that grades interview reps and files the transcript as a
+// normal Desk note, so spoken and typed notes end in the same place.
+const bmic = el("button", { type: "button", class: "mic", "aria-label": "Record for the Desk" }, "🎙");
+let brec = null;
+let bchunks = [];
+const BUBBLE_MAX_MS = 180000;
+bmic.addEventListener("click", async () => {
+  if (brec && brec.state === "recording") { brec.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = window.MediaRecorder && MediaRecorder.isTypeSupported("audio/mp4")
+      ? "audio/mp4" : "audio/webm";
+    brec = new MediaRecorder(stream, { mimeType: mime });
+    bchunks = [];
+    brec.ondataavailable = (e) => { if (e.data && e.data.size) bchunks.push(e.data); };
+    brec.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      bmic.classList.remove("on");
+      bmic.textContent = "🎙";
+      const blob = new Blob(bchunks, { type: (bchunks[0] && bchunks[0].type) || mime });
+      try {
+        await uploadEnqueue({ kind: "deskaudio", date: new Date().toISOString().slice(0, 10), blob });
+        bstat.textContent = "recorded, transcribes and files within the hour";
+      } catch (e) {
+        bstat.textContent = "this phone would not store the recording";
+      }
+      setTimeout(() => { bstat.textContent = ""; }, 2500);
+    };
+    brec.start(5000);
+    setTimeout(() => { if (brec && brec.state === "recording") brec.stop(); }, BUBBLE_MAX_MS);
+    bmic.classList.add("on");
+    bmic.textContent = "⏹";
+  } catch (e) {
+    bstat.textContent = "mic unavailable; type it instead";
+    setTimeout(() => { bstat.textContent = ""; }, 2500);
+  }
+});
+brow.appendChild(bmic);
 brow.appendChild(bstat);
 brow.appendChild(bsend);
 panel.appendChild(bta);

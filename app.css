@@ -912,3 +912,6 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
   color:var(--dim);font-size:.9rem}
 .repslist .more .grade{font-family:var(--mono);font-size:.82rem;color:var(--accent-ink)}
 .repslist .qfull{font-size:.9rem;color:var(--dim)}
+.bubblepanel .mic{width:38px;height:38px;border-radius:50%;border:1px solid var(--edge);
+  background:var(--bg);font-size:1rem;cursor:pointer}
+.bubblepanel .mic.on{background:var(--down);border-color:var(--down)}

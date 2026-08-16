@@ -224,7 +224,9 @@ export function flushUploads() {
       if (rec.dead) continue;
       const path = rec.kind === "scan"
         ? "/scan?date=" + encodeURIComponent(rec.date)
-        : "/answer?date=" + encodeURIComponent(rec.date) + "&qid=" + encodeURIComponent(rec.qid || "");
+        : rec.kind === "deskaudio"
+          ? "/deskaudio"
+          : "/answer?date=" + encodeURIComponent(rec.date) + "&qid=" + encodeURIComponent(rec.qid || "");
       let r;
       try {
         r = await fetch(WORKER + path, {
