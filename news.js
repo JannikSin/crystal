@@ -219,15 +219,26 @@ function renderStory(s) {
   const subs = el("div", { class: "subscores", hidden: "" });
   const d = s.scoreDetail || {};
   if (isScored) {
-    [["Reliability", d.reliability, "rel"], ["Charge", d.charge, "chg"]].forEach((row) => {
-      const tone = row[2] === "rel" && row[1] != null ? relClass(Number(row[1])) : "";
+    // David read "Charge: low" as a reason for a low score. It never was: the
+    // big number is importance-to-him alone; these two are independent
+    // read-with-care meters. So each row names its direction, charge's tone is
+    // INVERTED (low charge = calm framing = green), and a legend says the
+    // subscores are not inputs to the score.
+    [["Reliability", d.reliability, "rel", "higher = better sourced"],
+     ["Charge", d.charge, "chg", "how heated the framing is; low = calm, high = read with care"],
+    ].forEach((row) => {
+      const v = row[1] != null ? Number(row[1]) : null;
+      const tone = v == null ? "" : row[2] === "rel" ? relClass(v) : relClass(100 - v);
       const sub = el("div", { class: "sub" });
       sub.appendChild(el("div", { class: "subhead" },
-        "<span>" + row[0] + "</span><b class=\"" + tone + "\">" + (row[1] != null ? Number(row[1]) : "--") + "</b>"));
+        "<span>" + row[0] + "</span><b class=\"" + tone + "\">" + (v != null ? v : "--") + "</b>"));
       sub.appendChild(el("div", { class: "bar " + row[2] },
-        '<i class="' + tone + '" style="width:' + Number(row[1] || 0) + '%"></i>'));
+        '<i class="' + tone + '" style="width:' + (v || 0) + '%"></i>'));
+      sub.appendChild(el("div", { class: "subcap" }, row[3]));
       subs.appendChild(sub);
     });
+    subs.appendChild(el("p", { class: "reason legend" },
+      "The big number is importance to you, nothing else. Reliability and charge do not add into it; they are how-to-read-it meters."));
     if (d.reasoning) subs.appendChild(el("p", { class: "reason" }, md(d.reasoning)));
     subs.appendChild(el("div", { class: "aiest" }, "AI-estimated, not a fact"));
   } else {

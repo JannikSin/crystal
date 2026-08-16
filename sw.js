@@ -26,7 +26,9 @@
 // v15: the Desk tab lands (built on the desk/capture branch as "v12" before the
 //      Shop tab shipped). New desk.js module plus the index.html tab button and
 //      the sync.js desk queue type must land together or the router 404s the tab.
-const CACHE = "crystal-v15";
+// v16: news subscore captions (.subcap/.legend CSS pairs with news.js) and
+//      history-day feedback pull in today.js.
+const CACHE = "crystal-v16";
 
 const PRECACHE = [
   "./",

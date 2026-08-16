@@ -393,6 +393,8 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 .subscores{background:var(--card);border:1px solid var(--edge);border-radius:13px;
   box-shadow:var(--shadow);padding:12px 15px;margin:10px 0}
 .subscores .sub{margin:8px 0}
+.subscores .subcap{font-size:.72rem;color:var(--faint);margin-top:2px}
+.subscores .reason.legend{color:var(--dim);font-style:italic}
 .subscores .subhead{display:flex;justify-content:space-between;align-items:baseline;
   font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
 .subscores .subhead b{font-size:.9rem;color:var(--ink)}

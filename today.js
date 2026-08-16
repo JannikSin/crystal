@@ -84,6 +84,7 @@ function loadToday(force) {
 function pickDay(date, force) {
   viewDate = date || "";
   if (!viewDate) { loadToday(true); return; }
+  pullDayFeedback(viewDate);
   const cached = lsGet("brief.day." + viewDate, null);
   if (cached && !force) { brief = cached; render(""); return; }
   api("/brief?date=" + viewDate)
@@ -94,6 +95,21 @@ function pickDay(date, force) {
       if (cached) { brief = cached; render("Offline. Showing the cached copy."); }
       else { brief = null; render("", "Needs signal to fetch this day."); }
     });
+}
+
+// A rep recorded against a HISTORY day grades under that day's date (q69 sat
+// invisible for 5 days this way). When David opens a day, fetch that day's
+// grades too and merge them in, so the graded card shows wherever the rep was.
+function pullDayFeedback(d) {
+  if (feedback.some((f) => f.date === d)) return;
+  api("/feedback?date=" + d)
+    .then((r) => {
+      const items = (r.items || []).map((i) => Object.assign({ date: d, ran: r.ran }, i));
+      if (!items.length) return;
+      feedback = feedback.filter((f) => f.date !== d).concat(items);
+      if (viewDate === d) render("");
+    })
+    .catch(() => {});
 }
 
 // grades come back for today and yesterday; both are shown under the rep
@@ -422,7 +438,7 @@ function recorder(det, it) {
         lsSet("crystal.recorded", (lsGet("crystal.recorded", 0) || 0) + 1);
         note.textContent = level !== null && level < 0.01
           ? "Saved, but the audio looks silent. Check the mic and do it again."
-          : "Saved on the phone. It goes up on the next signal.";
+          : "Saved. Grades run with the 6:30 morning build and land right here, under this question.";
         paintLive(live);
       };
       // a timeslice means a chunk lands every 5s, so a killed tab costs seconds
