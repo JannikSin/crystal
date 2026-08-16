@@ -219,11 +219,11 @@ function renderStory(s) {
   const subs = el("div", { class: "subscores", hidden: "" });
   const d = s.scoreDetail || {};
   if (isScored) {
-    // David read "Charge: low" as a reason for a low score. It never was: the
-    // big number is importance-to-him alone; these two are independent
-    // read-with-care meters. So each row names its direction, charge's tone is
-    // INVERTED (low charge = calm framing = green), and a legend says the
-    // subscores are not inputs to the score.
+    // The big number is information quality (sourcing, corroboration), never
+    // personal relevance: David's 2026-08-16 rule, relevance lives in
+    // selection and rank only. Reliability and charge are independent
+    // read-with-care meters: each row names its direction, and charge's tone
+    // is INVERTED (low charge = calm framing = green).
     [["Reliability", d.reliability, "rel", "higher = better sourced"],
      ["Charge", d.charge, "chg", "how heated the framing is; low = calm, high = read with care"],
     ].forEach((row) => {
@@ -238,7 +238,7 @@ function renderStory(s) {
       subs.appendChild(sub);
     });
     subs.appendChild(el("p", { class: "reason legend" },
-      "The big number is importance to you, nothing else. Reliability and charge do not add into it; they are how-to-read-it meters."));
+      "The big number is how solid the information is: sourcing, corroboration, verification. Never tailored to you or your lanes; which stories appear and their order is where relevance lives."));
     if (d.reasoning) subs.appendChild(el("p", { class: "reason" }, md(d.reasoning)));
     subs.appendChild(el("div", { class: "aiest" }, "AI-estimated, not a fact"));
   } else {
