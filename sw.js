@@ -23,7 +23,7 @@
 // v12: the Shop tab. New module (shopping.js), new tab button in index.html and
 //      new .aislesec/.buyrow rules in the CSS, all three of which must land
 //      together or the tab renders unstyled against a stale shell.
-const CACHE = "crystal-v13";
+const CACHE = "crystal-v14";
 
 const PRECACHE = [
   "./",

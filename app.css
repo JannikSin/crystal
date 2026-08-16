@@ -817,6 +817,9 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
 .boltstrip .err{margin-top:6px;font-size:.8rem;color:var(--warn)}
 
 .aislesec{margin-top:22px}
+.aislesec .cartall{display:block;margin:8px 0 2px;padding:9px 13px;border-radius:11px;
+  background:var(--card);border:1px solid var(--edge);text-decoration:none;
+  font-family:var(--mono);font-size:.78rem;letter-spacing:.06em;color:var(--accent-ink)}
 .aislesec .sh{display:flex;align-items:center;gap:9px;font-family:var(--mono);
   font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);
   padding-bottom:6px;border-bottom:1px solid var(--edge)}

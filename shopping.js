@@ -154,6 +154,23 @@ function sectionBlock(s, rows) {
   h.appendChild(el("span", { class: "chip" }, meta.chip));
   box.appendChild(h);
   if (s.note) box.appendChild(el("p", { class: "secnote" }, md(s.note)));
+  // One tap fills an Amazon cart with the whole section (the classic
+  // aws/cart/add multi-ASIN URL). Only on actionable sections, and only from
+  // items whose url is a real /dp/ product page; search-fallback urls and
+  // non-Amazon links can't ride along. Ticked-off items still get added: the
+  // tick means "in the basket", and this IS the basket.
+  if (s.status === "buy" || s.status === "queued") {
+    const asins = (s.items || [])
+      .map((it) => (/amazon\.com\/dp\/([A-Z0-9]{10})/.exec(it.url || "") || [])[1])
+      .filter(Boolean);
+    if (asins.length >= 2) {
+      const q = asins.map((a, i) => `ASIN.${i + 1}=${a}&Quantity.${i + 1}=1`).join("&");
+      box.appendChild(el("a", {
+        class: "cartall", target: "_blank", rel: "noopener",
+        href: "https://www.amazon.com/gp/aws/cart/add.html?" + q,
+      }, `add all ${asins.length} to Amazon cart ↗`));
+    }
+  }
   (s.items || []).forEach((it) => box.appendChild(itemRow(it, s.status, rows)));
   return box;
 }
