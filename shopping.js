@@ -62,6 +62,14 @@ function render(data, note, empty) {
 
   if (note) root.appendChild(el("div", { class: "banner" }, note));
 
+  // Bolt watcher strip: its own fetch on its own clock, because the buy list
+  // comes from the laptop and the watcher summary comes from GitHub Actions.
+  // The placeholder goes in now so the strip lands above the list whenever the
+  // (possibly slower) /bolt answer arrives; isConnected guards a tab switch.
+  const boltBox = el("section", { class: "boltstrip" });
+  root.appendChild(boltBox);
+  loadCached("/bolt", "crystal.bolt", (b) => paintBolt(boltBox, b));
+
   if (empty || !data || !Array.isArray(data.sections) || !data.sections.length) {
     root.appendChild(emptyState("🛒", "Nothing on the list",
       "The buy list lands when the laptop pushes Life/Shopping-List."));
@@ -104,6 +112,38 @@ function render(data, note, empty) {
   retotal();
 
   root.appendChild(appFooter(() => loadCached("/shopping", "crystal.shopping", render, true)));
+}
+
+// The strip answers exactly two questions standing in the app: is the watcher
+// alive, and did it find anything this week. A quiet week renders as a good
+// thing on purpose; that is bolt's whole design contract.
+function paintBolt(box, d) {
+  if (!box.isConnected || !d || !d.built) return;
+  box.innerHTML = "";
+  const head = el("div", { class: "bh" });
+  head.appendChild(el("span", { class: "t" }, "⚡ bolt"));
+  const age = Date.now() - Date.parse(d.built);
+  const h = Math.floor(age / 3600000);
+  head.appendChild(el("span", { class: "age" },
+    age < 0 || Number.isNaN(age) ? "" : h < 1 ? "checked just now" : h < 48 ? `checked ${h}h ago` : "STALE, check the repo"));
+  head.appendChild(el("span", { class: "n" }, (d.tracked || 0) + " watched"));
+  box.appendChild(head);
+
+  const week = Array.isArray(d.week) ? d.week : [];
+  if (!week.length) {
+    box.appendChild(el("div", { class: "quiet" }, "Quiet week. Nothing cleared the bar, which is the plan working."));
+  } else {
+    week.slice(-3).reverse().forEach((w) => {
+      const r = el("div", { class: "hit" });
+      r.appendChild(el("span", { class: "d" }, String(w.date || "").slice(5)));
+      r.appendChild(el("span", { class: "w" }, md(String(w.title || w.key || ""))));
+      if (w.price) r.appendChild(el("span", { class: "p" }, "$" + w.price));
+      box.appendChild(r);
+    });
+  }
+  if (Array.isArray(d.errors) && d.errors.length) {
+    box.appendChild(el("div", { class: "err" }, d.errors.length + " source" + (d.errors.length > 1 ? "s" : "") + " erroring: " + md(String(d.errors[0]).slice(0, 80))));
+  }
 }
 
 function sectionBlock(s, rows) {

@@ -800,6 +800,22 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
   text-transform:uppercase;color:var(--dim)}
 .runtot .v{margin-left:auto;font-family:var(--mono);font-size:.95rem;color:var(--ink)}
 
+/* bolt watcher strip: one card above the list. Quiet week = calm card. */
+.boltstrip:empty{display:none}
+.boltstrip{margin-top:14px;padding:10px 13px;background:var(--card);
+  border:1px solid var(--edge);border-radius:13px}
+.boltstrip .bh{display:flex;align-items:baseline;gap:9px;font-family:var(--mono);
+  font-size:.62rem;letter-spacing:.14em;text-transform:uppercase}
+.boltstrip .bh .t{color:var(--ink);font-weight:600}
+.boltstrip .bh .age{color:var(--faint)}
+.boltstrip .bh .n{margin-left:auto;color:var(--dim)}
+.boltstrip .quiet{margin-top:6px;font-family:var(--serif);font-size:.92rem;color:var(--dim)}
+.boltstrip .hit{display:flex;gap:8px;align-items:baseline;margin-top:6px;font-size:.92rem}
+.boltstrip .hit .d{font-family:var(--mono);font-size:.72rem;color:var(--faint)}
+.boltstrip .hit .w{color:var(--ink)}
+.boltstrip .hit .p{margin-left:auto;font-family:var(--mono);font-size:.85rem;color:var(--ink)}
+.boltstrip .err{margin-top:6px;font-size:.8rem;color:var(--warn)}
+
 .aislesec{margin-top:22px}
 .aislesec .sh{display:flex;align-items:center;gap:9px;font-family:var(--mono);
   font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);

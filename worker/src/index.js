@@ -619,6 +619,22 @@ export default {
       return json(200, { ok: true, sections: body.sections.length, items: n });
     }
 
+    // ---------- bolt: clothing-watcher status, pushed by the bolt repo's Action ----------
+    if (path === "/bolt" && method === "GET") {
+      const raw = await env.STORE.get("bolt:latest");
+      if (!raw) return json(404, { error: "no bolt status yet" });
+      return raw200(raw);
+    }
+
+    if (path === "/bolt" && method === "POST") {
+      const { raw, body, err } = await readBody(request);
+      if (err) return err;
+      if (!body || typeof body !== "object" || typeof body.built !== "string")
+        return json(400, { error: "bolt payload needs built (ISO string)" });
+      await env.STORE.put("bolt:latest", raw);
+      return json(200, { ok: true, tracked: body.tracked ?? 0 });
+    }
+
     // ---------- scan: yesterday's handwritten list, raw JPEG ----------
     if (path === "/scan" && method === "GET") {
       if (!qdate) return json(400, { error: "date required" });
