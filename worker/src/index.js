@@ -493,12 +493,19 @@ export default {
     if (path === "/desk" && method === "POST") {
       let text = "";
       let at = "";
+      let app = "";
+      let route = "";
       try {
         const raw = await request.text();
         try {
           const body = JSON.parse(raw);
           text = String(body?.text ?? "").trim();
           at = clip(body?.at, 40);
+          // app + route from suggest.js (the per-app ✎ button): the drain's
+          // suggestion lane files these against their app with NO model call,
+          // so dropping them silently upgraded every app note to paid triage
+          app = clip(body?.app, 40);
+          route = clip(body?.route, 80);
         } catch {
           text = String(raw || "").trim(); // not JSON: the words still count
         }
@@ -510,6 +517,8 @@ export default {
         .join("");
       const id = `d-${d.toISOString().slice(0, 10).replace(/-/g, "")}-${rand}`;
       const note = { id, text: clip(text, 8000), at: at || d.toISOString(), via: who };
+      if (app) note.app = app;
+      if (route) note.route = route;
       // 30-day backstop TTL: the drain normally consumes within the hour, but
       // if it dies (the standing wire-automation failure class) raw notes must
       // not accumulate in KV forever behind one key (Lawyer). The doctor
@@ -873,10 +882,15 @@ export default {
           .map((b) => b.toString(16).padStart(2, "0"))
           .join("");
         const id = `da-${d.toISOString().slice(0, 10).replace(/-/g, "")}-${rand}`;
+        const meta = { id, bytes: buf.byteLength, type: ct, at: d.toISOString() };
+        // spoken app suggestions: the transcript inherits these so the drain's
+        // suggestion lane can file it against its app like a typed ✎ note
+        const mApp = clip(url.searchParams.get("app"), 40);
+        const mRoute = clip(url.searchParams.get("route"), 80);
+        if (mApp) meta.app = mApp;
+        if (mRoute) meta.route = mRoute;
         await env.STORE.put(`deskaudio:${id}`, buf, { expirationTtl: BLOB_TTL });
-        await env.STORE.put(`deskaudiometa:${id}`,
-          JSON.stringify({ id, bytes: buf.byteLength, type: ct, at: d.toISOString() }),
-          { expirationTtl: BLOB_TTL });
+        await env.STORE.put(`deskaudiometa:${id}`, JSON.stringify(meta), { expirationTtl: BLOB_TTL });
         return json(200, { ok: true, id, bytes: buf.byteLength });
       }
 
