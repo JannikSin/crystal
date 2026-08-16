@@ -41,8 +41,6 @@ const PEN_SECTION = "Your list";
 let brief = null;
 let viewDate = "";       // "" = latest; else a YYYY-MM-DD picked in the switcher
 let doneMap = {};
-let feedback = [];       // graded answers for today + yesterday
-let feedbackAsked = "";
 let swapIdx = 0;         // ephemeral: a swap is a render choice, never persisted
 let rewardBox = null;
 
@@ -65,7 +63,6 @@ function loadToday(force) {
       lsSet("brief.last", data);
       cacheBrief(data);
       render("");
-      pullFeedback();
     })
     .catch((e) => {
       if (e === "auth") return;
@@ -84,7 +81,6 @@ function loadToday(force) {
 function pickDay(date, force) {
   viewDate = date || "";
   if (!viewDate) { loadToday(true); return; }
-  pullDayFeedback(viewDate);
   const cached = lsGet("brief.day." + viewDate, null);
   if (cached && !force) { brief = cached; render(""); return; }
   api("/brief?date=" + viewDate)
@@ -97,38 +93,9 @@ function pickDay(date, force) {
     });
 }
 
-// A rep recorded against a HISTORY day grades under that day's date (q69 sat
-// invisible for 5 days this way). When David opens a day, fetch that day's
-// grades too and merge them in, so the graded card shows wherever the rep was.
-function pullDayFeedback(d) {
-  if (feedback.some((f) => f.date === d)) return;
-  api("/feedback?date=" + d)
-    .then((r) => {
-      const items = (r.items || []).map((i) => Object.assign({ date: d, ran: r.ran }, i));
-      if (!items.length) return;
-      feedback = feedback.filter((f) => f.date !== d).concat(items);
-      if (viewDate === d) render("");
-    })
-    .catch(() => {});
-}
-
-// grades come back for today and yesterday; both are shown under the rep
-function pullFeedback() {
-  const stamp = todayIso();
-  if (feedbackAsked === stamp) return;
-  feedbackAsked = stamp;
-  Promise.all([todayIso(), shiftIso(-1)].map((d) =>
-    api("/feedback?date=" + d)
-      // ran is the transcriber's own stamp: when the grader last actually ran
-      .then((r) => (r.items || []).map((i) => Object.assign({ date: d, ran: r.ran }, i)))
-      .catch(() => [])
-  )).then((lists) => {
-    const items = lists[0].concat(lists[1]);
-    if (!items.length) return;
-    feedback = items;
-    if (!viewDate) render("");
-  });
-}
+// Grades no longer render on this board at all: grading is interview prep, so
+// the graded cards live on the Career tab's reps archive (David, 2026-08-16).
+// The recorder below only records and says where the grade will land.
 
 // ---------- render ----------
 function render(offlineNote, emptyDayNote) {
@@ -393,7 +360,7 @@ function recorder(det, it) {
   det.appendChild(live);
   paintLive(live);
 
-  gradedFor(qid, it).forEach((card) => det.appendChild(card));
+  det.appendChild(el("p", { class: "hint" }, "Grades land on the Career tab, under interview reps."));
 
   const mime = pickMime();
   if (!qid) { btn.disabled = true; note.textContent = "No question id on this item, so nothing to file a recording against."; return; }
@@ -438,7 +405,7 @@ function recorder(det, it) {
         lsSet("crystal.recorded", (lsGet("crystal.recorded", 0) || 0) + 1);
         note.textContent = level !== null && level < 0.01
           ? "Saved, but the audio looks silent. Check the mic and do it again."
-          : "Saved. Grades run with the 6:30 morning build and land right here, under this question.";
+          : "Saved. Grades run with the 6:30 morning build and land on the Career tab.";
         paintLive(live);
       };
       // a timeslice means a chunk lands every 5s, so a killed tab costs seconds
@@ -483,27 +450,12 @@ async function rmsOf(blob) {
 function paintLive(live) {
   const rec = lsGet("crystal.recorded", 0) || 0;
   uploadStats().then((s) => {
-    const bits = [rec + " recorded", feedback.length + " graded"];
+    const bits = [rec + " recorded"];
     if (s.pending) bits.push(s.pending + " waiting to send");
     // a dead upload names its reason: a silent count teaches nothing
     if (s.dead) bits.push(s.dead + " not sent" + (s.why ? ", " + s.why : ""));
-    const ran = (feedback.find((f) => f.ran) || {}).ran;
-    if (ran) bits.push("graded last " + String(ran).slice(0, 16).replace("T", " "));
+    bits.push("grades on the Career tab");
     live.textContent = bits.join(", ") + ".";
-  });
-}
-
-// One card, for THIS question. Every grade in the payload used to be pasted
-// under every recorder on the board.
-function gradedFor(qid, it) {
-  return feedback.filter((f) => f.qid === qid).map((f) => {
-    const c = el("div", { class: "graded" });
-    c.appendChild(el("div", { class: "g" }, "graded · " + md(f.date || "") + " · " + md(f.qid || "")));
-    if (it.detail) c.appendChild(el("p", {}, md(String(it.detail).split("\n")[0])));
-    if (f.transcriptExcerpt) c.appendChild(el("blockquote", {}, md(f.transcriptExcerpt)));
-    if (f.grade !== undefined && f.grade !== null) c.appendChild(el("p", {}, md("Grade: " + f.grade)));
-    if (f.workshop) blockMd(c, f.workshop);
-    return c;
   });
 }
 

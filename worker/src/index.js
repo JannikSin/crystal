@@ -740,6 +740,24 @@ export default {
       return json(200, { ok: true, sections: body.sections.length, items: n });
     }
 
+    // ---------- reps: permanent archive of graded interview answers ----------
+    // The per-date feedback keys expire in 14 days (they feed the transient
+    // under-question cards); this is the Career tab's forever list, maintained
+    // and pushed whole by transcribe_grade.py after each grading run.
+    if (path === "/reps" && method === "GET") {
+      const raw = await env.STORE.get("reps:latest");
+      return raw200(raw || JSON.stringify({ items: [] }));
+    }
+
+    if (path === "/reps" && method === "POST") {
+      const { raw, body, err } = await readBody(request);
+      if (err) return err;
+      if (!body || !Array.isArray(body.items) || body.items.length > 300)
+        return json(400, { error: "reps payload needs items[] (max 300)" });
+      await env.STORE.put("reps:latest", raw);
+      return json(200, { ok: true, items: body.items.length });
+    }
+
     // ---------- bolt: clothing-watcher status, pushed by the bolt repo's Action ----------
     if (path === "/bolt" && method === "GET") {
       const raw = await env.STORE.get("bolt:latest");

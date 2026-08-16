@@ -51,7 +51,48 @@ function render(data, note, empty) {
   if (data.outreach) root.appendChild(outreachSlip(data.outreach));
   if (data.signals) root.appendChild(signalsBlock(data.signals));
 
+  // Interview reps: recording lives on the Today board (accessible where the
+  // day is), the GRADES live here, because grading is interview prep (David,
+  // 2026-08-16). /reps is the permanent archive, every graded rep ever; the
+  // 14-day per-date feedback keys only feed the transient recorder note.
+  const repsBox = el("section", { class: "repslist" });
+  root.appendChild(repsBox);
+  loadCached("/reps", "crystal.reps", (r) => paintReps(repsBox, r));
+
   root.appendChild(appFooter(() => loadCached("/career", "crystal.career", render, true)));
+}
+
+function paintReps(box, r) {
+  if (!box.isConnected) return;
+  box.innerHTML = "";
+  box.appendChild(el("div", { class: "sh" }, "🧠 interview reps · graded"));
+  const items = (r && Array.isArray(r.items)) ? r.items : [];
+  if (!items.length) {
+    box.appendChild(el("p", { class: "secnote" },
+      "No graded reps yet. Record on the Today board; grades land here with the 6:30 morning build."));
+    return;
+  }
+  items.forEach((it) => {
+    const wrap = el("div", { class: "rep" });
+    const head = el("button", { type: "button", class: "hd", "aria-expanded": "false" });
+    head.appendChild(el("span", { class: "d" }, md(String(it.date || "").slice(5))));
+    head.appendChild(el("span", { class: "q" }, md(String(it.q || it.qid || "").slice(0, 80))));
+    head.appendChild(el("span", { class: "car" }, "›"));
+    const body = el("div", { class: "more" });
+    body.hidden = true;
+    if (it.q) body.appendChild(el("p", { class: "qfull" }, md(it.q)));
+    if (it.transcriptExcerpt) body.appendChild(el("blockquote", {}, md(it.transcriptExcerpt)));
+    if (it.grade != null) body.appendChild(el("p", { class: "grade" }, md("Grade: " + it.grade)));
+    if (it.workshop) blockMd(body, it.workshop);
+    head.addEventListener("click", () => {
+      body.hidden = !body.hidden;
+      head.setAttribute("aria-expanded", body.hidden ? "false" : "true");
+      wrap.classList.toggle("open", !body.hidden);
+    });
+    wrap.appendChild(head);
+    wrap.appendChild(body);
+    box.appendChild(wrap);
+  });
 }
 
 // the one card with the blueprint grid behind it. Everything else on the tab

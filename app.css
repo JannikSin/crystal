@@ -881,3 +881,34 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
 @media(prefers-color-scheme:dark){
   .buyrow .tk[aria-pressed="true"] svg{stroke:var(--up)}
 }
+
+/* the bubble: the Desk's write side, floating on every tab above the tabbar */
+.bubble{position:fixed;right:14px;bottom:74px;z-index:40;width:48px;height:48px;
+  border-radius:50%;border:1px solid var(--edge);background:var(--card);
+  font-size:1.25rem;box-shadow:var(--shadow);cursor:pointer}
+.bubblepanel{position:fixed;right:14px;bottom:130px;z-index:40;width:min(340px,calc(100vw - 28px));
+  background:var(--card);border:1px solid var(--edge);border-radius:14px;
+  box-shadow:var(--shadow);padding:10px}
+.bubblepanel textarea{width:100%;min-height:84px;border:1px solid var(--edge);border-radius:10px;
+  font-size:16px;color:var(--ink);background:var(--bg);padding:8px;resize:vertical}
+.bubblepanel .row{display:flex;align-items:center;gap:10px;margin-top:6px}
+.bubblepanel .stat{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-left:auto}
+.bubblepanel .send{padding:7px 16px;border-radius:99px;border:1px solid var(--edge);
+  background:var(--bg);color:var(--accent-ink);cursor:pointer}
+
+/* career: the graded reps archive */
+.repslist{margin-top:22px}
+.repslist .sh{font-family:var(--mono);font-size:.6rem;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.repslist .rep{border-bottom:1px solid var(--hairline)}
+.repslist .hd{display:flex;gap:9px;align-items:baseline;width:100%;padding:10px 2px;
+  background:transparent;border:0;text-align:left;font:inherit;color:var(--ink);cursor:pointer}
+.repslist .hd .d{font-family:var(--mono);font-size:.72rem;color:var(--faint);flex:0 0 auto}
+.repslist .hd .q{flex:1;font-size:.93rem}
+.repslist .hd .car{color:var(--faint);transition:transform .15s}
+.repslist .rep.open .hd .car{transform:rotate(90deg)}
+.repslist .more{padding:0 2px 12px}
+.repslist .more blockquote{margin:6px 0;padding-left:10px;border-left:2px solid var(--edge);
+  color:var(--dim);font-size:.9rem}
+.repslist .more .grade{font-family:var(--mono);font-size:.82rem;color:var(--accent-ink)}
+.repslist .qfull{font-size:.9rem;color:var(--dim)}

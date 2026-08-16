@@ -28,7 +28,9 @@
 //      the sync.js desk queue type must land together or the router 404s the tab.
 // v16: news subscore captions (.subcap/.legend CSS pairs with news.js) and
 //      history-day feedback pull in today.js.
-const CACHE = "crystal-v16";
+// v17: the bubble (app.js + .bubble CSS), Career reps archive (career.js +
+//      .repslist CSS), grades moved off the Today board. Paired changes.
+const CACHE = "crystal-v17";
 
 const PRECACHE = [
   "./",
