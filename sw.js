@@ -23,7 +23,10 @@
 // v12: the Shop tab. New module (shopping.js), new tab button in index.html and
 //      new .aislesec/.buyrow rules in the CSS, all three of which must land
 //      together or the tab renders unstyled against a stale shell.
-const CACHE = "crystal-v14";
+// v15: the Desk tab lands (built on the desk/capture branch as "v12" before the
+//      Shop tab shipped). New desk.js module plus the index.html tab button and
+//      the sync.js desk queue type must land together or the router 404s the tab.
+const CACHE = "crystal-v15";
 
 const PRECACHE = [
   "./",
@@ -40,6 +43,7 @@ const PRECACHE = [
   "./shopping.js",
   "./listen.js",
   "./library.js",
+  "./desk.js",
   "./app.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",

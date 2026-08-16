@@ -43,6 +43,16 @@
 //   POST /career              laptop pushes roster + outreach (validated)
 //   GET  /career              the roster
 //
+// Desk additions (the idea inbox; Crystal System/Desk.md):
+//   POST /desk               phone or laptop drops a note; one KV key per note
+//                            (desk:<id>); never 4xx except 401
+//   GET  /desk               phone: the derived board; laptop: board + raw notes
+//   DELETE /desk?id=         laptop drain consumes a note after filing it
+//   POST /deskapprove        phone approves ticket <id> with the approve secret
+//                            (DESK_APPROVE_KEY, never persisted client-side)
+//   GET  /deskapprove        drain polls approvals
+//   POST /deskboard          laptop pushes the derived board
+//
 // scan:/answer:/feedback: keys carry a 14 day expirationTtl. Nothing else does,
 // because the vault merge depends on pulling ticks and captures on its own clock.
 // Media never rides inside JSON: those routes take raw bytes, no base64.
@@ -81,6 +91,7 @@ const MAX_BODY = 1024 * 1024;
 // encoded caps per route, checked on content-length before anything is read
 const BODY_CAP = { "/scan": 2 * 1024 * 1024, "/answer": 6 * 1024 * 1024 };
 const BLOB_TTL = 14 * 24 * 3600;
+const DESK_TTL = 30 * 24 * 3600; // backstop for un-drained desk: / deskapprove: keys
 const AUDIO_TYPES = ["audio/mp4", "audio/m4a", "audio/aac", "audio/webm"];
 const QUOTE_TTL = 15 * 60 * 1000;
 const HIST_TTL = 24 * 60 * 60 * 1000;
@@ -135,7 +146,7 @@ function role(request, env) {
 
 // The phone reads everything it renders and writes only what the user taps.
 // It never pushes a payload, never touches raw answer audio, never deletes.
-const PHONE_POST = ["/ticks", "/capture", "/newsread", "/scan", "/answer"];
+const PHONE_POST = ["/ticks", "/capture", "/newsread", "/scan", "/answer", "/desk", "/deskapprove"];
 function phoneAllowed(method, path) {
   if (method === "GET") return path !== "/answer";
   if (method === "POST") return PHONE_POST.includes(path);
@@ -356,7 +367,11 @@ export default {
       return json(403, { error: "laptop key required for this route" });
 
     const qdate = url.searchParams.get("date") || "";
-    if (qdate && !DATE_RE.test(qdate)) return json(400, { error: "bad date" });
+    // POST /desk must be incapable of any 4xx but 401 (sync.js drops the queue
+    // head on any 4xx), so it is exempt from the shared bad-date gate; it
+    // reads no date anyway.
+    if (qdate && !DATE_RE.test(qdate) && !(path === "/desk" && method === "POST"))
+      return json(400, { error: "bad date" });
 
     // ---------- brief ----------
     if (path === "/brief" && method === "GET") {
@@ -454,6 +469,112 @@ export default {
       });
       await env.STORE.put(key, JSON.stringify({ date, items, updated: new Date().toISOString() }));
       return json(200, { ok: true, count: items.length });
+    }
+
+    // ---------- desk: the idea inbox ----------
+    // One KV key per note (desk:<id>): no growing value, no O(n^2) append, no
+    // 25MB ceiling, no lost update. POST /desk must be incapable of any 4xx
+    // except 401, because sync.js drops the queue head on ANY 4xx, so a
+    // validation 400 would lose the note as silently as a 429.
+    if (path === "/desk" && method === "POST") {
+      let text = "";
+      let at = "";
+      try {
+        const raw = await request.text();
+        try {
+          const body = JSON.parse(raw);
+          text = String(body?.text ?? "").trim();
+          at = clip(body?.at, 40);
+        } catch {
+          text = String(raw || "").trim(); // not JSON: the words still count
+        }
+      } catch {}
+      if (!text) return json(200, { ok: true, empty: true }); // never 4xx
+      const d = new Date();
+      const rand = [...crypto.getRandomValues(new Uint8Array(4))]
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+      const id = `d-${d.toISOString().slice(0, 10).replace(/-/g, "")}-${rand}`;
+      const note = { id, text: clip(text, 8000), at: at || d.toISOString(), via: who };
+      // 30-day backstop TTL: the drain normally consumes within the hour, but
+      // if it dies (the standing wire-automation failure class) raw notes must
+      // not accumulate in KV forever behind one key (Lawyer). The doctor
+      // complains long before this fires.
+      await env.STORE.put(`desk:${id}`, JSON.stringify(note), { expirationTtl: DESK_TTL });
+      return json(200, { ok: true, id });
+    }
+
+    if (path === "/desk" && method === "GET") {
+      // both roles; the board is the derived view, the raw notes are for the
+      // laptop drain only
+      const board = await env.STORE.get("deskboard:latest");
+      if (who === "phone") return raw200(board || JSON.stringify({ built: null, tickets: [] }));
+      const list = await env.STORE.list({ prefix: "desk:", limit: 200 });
+      const notes = [];
+      for (const k of list.keys) {
+        const raw = await env.STORE.get(k.name);
+        if (!raw) continue;
+        try {
+          notes.push(JSON.parse(raw));
+        } catch {}
+      }
+      let parsedBoard = null;
+      try {
+        parsedBoard = board ? JSON.parse(board) : null;
+      } catch {}
+      return json(200, { board: parsedBoard, notes });
+    }
+
+    if (path === "/desk" && method === "DELETE") {
+      // laptop only via the role gate; the drain consumes a note after filing
+      const id = url.searchParams.get("id") || "";
+      if (!ID_RE.test(id)) return json(400, { error: "bad id" });
+      await env.STORE.delete(`desk:${id}`);
+      return json(200, { ok: true, id });
+    }
+
+    // Approve rides its own route so the path gate applies. The secret is a
+    // 128-bit-minimum value from the password manager, never persisted
+    // client-side; it defends the key at rest, not script running in the page.
+    if (path === "/deskapprove" && method === "POST") {
+      const { body, err } = await readBody(request);
+      if (err) return err;
+      const id = String(body?.id || "");
+      if (!ID_RE.test(id)) return json(400, { error: "bad id" });
+      const secret = String(body?.secret || "");
+      const wanted = keySet(env, "DESK_APPROVE_KEY", "DESK_APPROVE_KEYS");
+      let okSecret = false;
+      for (const w of wanted) if (sameKey(secret, w)) okSecret = true;
+      if (!wanted.length || !okSecret) return json(403, { error: "bad approve secret" });
+      const rec = { id, approve: body?.approve !== false, at: new Date().toISOString(), via: who };
+      // TTL so approval records (an id list, no secret) do not grow forever;
+      // nothing in lane 8a consumes them (Lawyer).
+      await env.STORE.put(`deskapprove:${id}`, JSON.stringify(rec), { expirationTtl: DESK_TTL });
+      return json(200, { ok: true, id, approve: rec.approve });
+    }
+
+    if (path === "/deskapprove" && method === "GET") {
+      // the drain polls approvals; records hold no secret
+      const list = await env.STORE.list({ prefix: "deskapprove:", limit: 200 });
+      const items = [];
+      for (const k of list.keys) {
+        const raw = await env.STORE.get(k.name);
+        if (!raw) continue;
+        try {
+          items.push(JSON.parse(raw));
+        } catch {}
+      }
+      return json(200, { items });
+    }
+
+    if (path === "/deskboard" && method === "POST") {
+      // laptop only via the role gate: the drain derives, the phone renders
+      const { raw, body, err } = await readBody(request);
+      if (err) return err;
+      if (!body || typeof body !== "object" || !Array.isArray(body.tickets))
+        return json(400, { error: "board must be {built, tickets[]}" });
+      await env.STORE.put("deskboard:latest", raw);
+      return json(200, { ok: true, tickets: body.tickets.length });
     }
 
     // ---------- news ----------
