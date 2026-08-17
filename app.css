@@ -418,9 +418,8 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 .contested ul{margin:.3rem 0 0;padding-left:1.1rem}
 
 /* =========================================================================
-   MARKETS: the terminal
-   A dark instrument panel in BOTH themes, mono throughout, a grid of ticker
-   chips with status dots, and an accordion body under the grid.
+   MARKET DIGEST (at the foot of Money since v21; the Markets tab and its
+   ticker-chip grid are gone, the chips duplicated the position rows)
    ========================================================================= */
 .term{background:var(--term-bg);border:1px solid var(--term-line);border-radius:14px;
   padding:13px 13px 15px;margin:14px 0 0;color:var(--term-ink);font-family:var(--mono)}
@@ -429,36 +428,6 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
   border-bottom:1px solid var(--term-line);padding-bottom:9px}
 .term .th b{color:var(--term-ink);font-weight:600;letter-spacing:.1em}
 .term .shut{margin-top:9px;font-size:.72rem;color:var(--dot-watch);letter-spacing:.06em}
-.tkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:7px;margin-top:11px}
-.tkchip{background:var(--term-panel);border:1px solid var(--term-line);border-radius:8px;
-  padding:8px 9px 9px;text-align:left;cursor:pointer;color:var(--term-ink);
-  font-family:var(--mono);display:block;width:100%}
-.tkchip[aria-expanded="true"]{border-color:var(--term-dim);background:#1e2431}
-/* a fired breaker reads at a glance, not only through a 7px dot */
-.tkchip.fired{border-color:var(--dot-fired);background:rgba(226,86,79,.11)}
-.tkchip .sym{font-size:.82rem;font-weight:600;letter-spacing:.08em;display:flex;
-  align-items:center;gap:6px}
-.tkchip .px{font-size:.72rem;color:var(--term-dim);font-variant-numeric:tabular-nums;margin-top:3px}
-.tkchip .mv{font-size:.74rem;font-variant-numeric:tabular-nums}
-.tkchip .mv.up{color:var(--term-up)}
-.tkchip .mv.down{color:var(--term-down)}
-.dot{width:7px;height:7px;border-radius:99px;flex:0 0 auto;background:var(--term-dim)}
-.dot.hold{background:var(--dot-hold)}
-.dot.watch{background:var(--dot-watch)}
-.dot.fired{background:var(--dot-fired);animation:pulse 1.4s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
-.tkbody{margin-top:11px;border-top:1px solid var(--term-line);padding-top:10px;
-  font-family:var(--sans);font-size:.88rem;color:var(--term-ink)}
-.tkbody h4{font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--term-dim);margin:10px 0 4px}
-.tkbody p{margin:.4rem 0}
-.tkbody ul{margin:.4rem 0;padding-left:1.1rem}
-.tkbody li::marker{color:var(--term-dim)}
-.tkbody a{color:#8fb7ff;text-decoration-color:#3b4a63}
-.tkbody code{background:#1e2431;color:#a9c3e8}
-.tklegend{font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;color:var(--term-dim);
-  margin-top:11px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-.tklegend span{display:flex;align-items:center;gap:5px}
 .msec{background:var(--card);border:1px solid var(--edge);border-radius:13px;margin:10px 0;
   overflow:hidden;box-shadow:var(--shadow)}
 .msec>summary{list-style:none;cursor:pointer;padding:11px 15px;display:flex;gap:8px;

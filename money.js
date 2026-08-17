@@ -6,8 +6,8 @@
 // cash. Positions, charts and the LTCG maths are the proven v3 code.
 
 import {
-  root, api, el, md, lsGet, lsSet, go, fmtMoney, fmtPct, arrowOf, dirClass, daysUntil,
-  mastHead, appFooter, emptyState, isTab,
+  root, api, el, md, blockMd, lsGet, lsSet, go, fmtMoney, fmtPct, arrowOf, dirClass, daysUntil,
+  todayIso, fmtDay, fmtWeekday, fmtBuilt, mastHead, appFooter, emptyState, isTab,
 } from "./core.js";
 import { cachedEdition } from "./news.js";
 
@@ -280,8 +280,65 @@ function renderMoney(note, noHoldings) {
     root.appendChild(sec);
   }
 
+  // ---- the market digest ----
+  root.appendChild(digestSection());
+
   root.appendChild(el("p", { class: "moneyfoot" }, "Educational, not advice. Verify on Schwab."));
   root.appendChild(appFooter(() => { load(true); refreshQuotes(); }));
+}
+
+// The evening digest, folded in from the retired Markets tab (David,
+// 2026-08-17): the ticker chips duplicated the position rows above, so the
+// digest SECTIONS are what survived, "breakers" included now that there are
+// no status dots to carry it. Self-filling container, the Desk board's shape.
+// The one rule kept from the terminal: never render a stale digest as if it
+// were live, and a missed run says so instead of showing yesterday's edition
+// as tonight's.
+function digestSection() {
+  const box = el("div", {});
+  const paint = (data, note) => {
+    if (!isTab("money")) return;
+    box.innerHTML = "";
+    box.appendChild(el("div", { class: "eyebrow", style: "margin-top:26px" }, "market digest"));
+    if (note) box.appendChild(el("div", { class: "banner" }, note));
+    if (!data) {
+      box.appendChild(el("p", { class: "empty" },
+        "No digest yet. The evening edition lands about 30 minutes after the close, " +
+        "and a missed run leaves this empty rather than showing you yesterday."));
+      return;
+    }
+    const panel = el("section", { class: "term" });
+    const th = el("div", { class: "th" });
+    th.appendChild(el("span", {}, fmtDay(data.date)));
+    th.appendChild(el("b", {}, data.built ? fmtBuilt(data.built) : ""));
+    panel.appendChild(th);
+    if (data.date < todayIso()) {
+      panel.appendChild(el("div", { class: "shut" }, fmtWeekday(data.date) + "'s close. Markets shut."));
+    }
+    box.appendChild(panel);
+    // all collapsed at the foot of a long page; one tap opens the one wanted
+    (data.sections || []).forEach((sec) => {
+      const d = el("details", { class: "msec" });
+      const sum = el("summary", {});
+      sum.appendChild(el("span", { class: "t" }, md(sec.title)));
+      d.appendChild(sum);
+      const body = el("div", { class: "cardbody" });
+      blockMd(body, sec.md);
+      d.appendChild(body);
+      box.appendChild(d);
+    });
+  };
+  const cached = lsGet("crystal.markets.last", null);
+  if (cached) paint(cached, "");
+  api("/markets")
+    .then((data) => { lsSet("crystal.markets.last", data); paint(data, ""); })
+    .catch((e) => {
+      if (e === "auth") return;
+      if (e === "empty") { paint(null, ""); return; }
+      if (cached) paint(cached, "Offline. Showing the cached digest.");
+      else paint(null, "");
+    });
+  return box;
 }
 
 // accounts: {checking, creditCard, income, asOf}

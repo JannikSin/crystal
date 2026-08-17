@@ -6,7 +6,6 @@ import { root, tabbar, key, keyScreen, setRouter, go, el } from "./core.js";
 import { flush, flushUploads, queueDesk, uploadEnqueue } from "./sync.js";
 import * as today from "./today.js";
 import * as news from "./news.js";
-import * as markets from "./markets.js";
 import * as money from "./money.js";
 import * as career from "./career.js";
 import * as listen from "./listen.js";
@@ -15,8 +14,9 @@ import * as shopping from "./shopping.js";
 
 // The Desk TAB is gone (David, 2026-08-17): the bubble below is the write
 // side on every tab, and the board renders at the foot of Today. An old
-// #/desk hash falls through the unknown-tab guard onto Today.
-const ROUTES = { today, news, markets, money, career, shopping, listen, library };
+// #/desk hash falls through the unknown-tab guard onto Today. The Markets
+// tab followed the same day: its digest lives at the foot of Money now.
+const ROUTES = { today, news, money, career, shopping, listen, library };
 
 function route() {
   if (!key()) { keyScreen(""); return; }
@@ -34,6 +34,8 @@ function route() {
   // An unknown tab used to fall through to today.open() while the hash still
   // read #/foo, so today's own isTab() guard dropped the paint and left a blank
   // page under a highlighted tab bar. Rewrite the hash instead of retargeting.
+  // Old #/markets links land where the digest lives now.
+  if (parts[0] === "markets") { go("#/money"); return; }
   if (parts[0] && !ROUTES[parts[0]]) { go("#/today"); return; }
   const tab = ROUTES[parts[0]] ? parts[0] : "today";
   tabbar.querySelectorAll("button").forEach((b) => {
