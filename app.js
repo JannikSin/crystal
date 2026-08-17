@@ -12,9 +12,11 @@ import * as career from "./career.js";
 import * as listen from "./listen.js";
 import * as library from "./library.js";
 import * as shopping from "./shopping.js";
-import * as desk from "./desk.js";
 
-const ROUTES = { today, news, markets, money, career, shopping, listen, library, desk };
+// The Desk TAB is gone (David, 2026-08-17): the bubble below is the write
+// side on every tab, and the board renders at the foot of Today. An old
+// #/desk hash falls through the unknown-tab guard onto Today.
+const ROUTES = { today, news, markets, money, career, shopping, listen, library };
 
 function route() {
   if (!key()) { keyScreen(""); return; }
@@ -53,13 +55,20 @@ window.addEventListener("hashchange", route);
 // desk thing" (David, 2026-08-16, via the Desk itself). One floating button,
 // outside the router so it survives every tab switch; it opens the same
 // DESK queue (queueDesk, offline-safe FIFO), so everything typed here goes
-// through the hourly triage drain. The Desk TAB stays as the read-side board;
-// this is the write side, everywhere.
+// through the hourly triage drain. The board it feeds renders at the foot of
+// Today; this is the write side, everywhere.
 const bubble = el("button", { type: "button", class: "bubble", "aria-label": "Tell Crystal" }, "🪞");
 const panel = el("div", { class: "bubblepanel" });
 panel.hidden = true;
 const bta = document.createElement("textarea");
 bta.placeholder = "Tell Crystal. A thought, a fix, an idea...";
+// Long dictated notes outgrew the fixed 84px box and reviewing what was said
+// meant fighting a tiny inner scroll mid-dictation. Grow with the text up to
+// the CSS max-height; past that the textarea scrolls itself.
+bta.addEventListener("input", () => {
+  bta.style.height = "auto";
+  bta.style.height = bta.scrollHeight + "px";
+});
 const brow = el("div", { class: "row" });
 const bstat = el("span", { class: "stat" }, "");
 const bsend = el("button", { type: "button", class: "send" }, "Send");

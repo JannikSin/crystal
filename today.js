@@ -12,10 +12,11 @@ import {
   appFooter, renderDays, pruneDated, WORKER, key, isTab,
 } from "./core.js";
 import {
-  localTicks, isDone, setTick, tickControl, queueCapture, flush,
+  localTicks, isDone, setTick, tickControl, flush,
   uploadEnqueue, uploadStats,
 } from "./sync.js";
 import { computeReward } from "./reward.js";
+import { boardSection } from "./desk.js";
 
 // M3: the one slot table. Array order inside a slot is authoritative; the
 // client never sorts. Hours 00:00-05:00 sit at the foot of night.
@@ -128,7 +129,7 @@ function render(offlineNote, emptyDayNote) {
   if (!brief) {
     root.appendChild(el("p", { class: "empty" },
       emptyDayNote || "No brief cached yet. Open with signal once."));
-    root.appendChild(renderCapture());
+    root.appendChild(boardSection());
     root.appendChild(appFooter(() => pickDay(viewDate, true)));
     return;
   }
@@ -138,7 +139,7 @@ function render(offlineNote, emptyDayNote) {
   if (brief.v !== 2) {
     doneMap = {};
     root.appendChild(legacyBoard());
-    root.appendChild(renderCapture());
+    root.appendChild(boardSection());
     root.appendChild(appFooter(() => pickDay(viewDate, true)));
     paintMeter();
     flush();
@@ -148,13 +149,13 @@ function render(offlineNote, emptyDayNote) {
   const date = stale ? todayIso() : brief.date;
   const local = localTicks(date);
   doneMap = {};
-  (brief.timeline || []).forEach((it) => { doneMap[it.id] = isDone(it, local, brief.built); });
+  flatItems(brief.timeline).forEach((it) => { doneMap[it.id] = isDone(it, local, brief.built); });
 
   // A granted fun day is the whole point of the ledger. Nothing is owed, so
   // nothing is drawn: no timeline, no cards, no reward strip nagging about it.
   if (isToday && brief.reward && brief.reward.funDay === todayIso()) {
     root.appendChild(el("p", { class: "empty" }, "Today is yours. Nothing renders."));
-    root.appendChild(renderCapture());
+    root.appendChild(boardSection());
     root.appendChild(appFooter(() => pickDay(viewDate, true)));
     flush();
     return;
@@ -173,7 +174,7 @@ function render(offlineNote, emptyDayNote) {
   if (brief.scanThumb) root.appendChild(scanCard(brief.scanThumb));
   renderCards(root, brief.cards || [], date, local);
 
-  root.appendChild(renderCapture());
+  root.appendChild(boardSection());
   root.appendChild(appFooter(() => pickDay(viewDate, true)));
   paintMeter();
   flush();
@@ -227,6 +228,19 @@ function paintReward() {
 }
 
 // ---------- the timeline ----------
+// A group (kind "group") is one row holding child ticks, possibly nested one
+// level deeper (Morning routine > Supplements). The leaves are what the day
+// owes: the meter, the reward engine and the done map all count leaves, never
+// the group rows themselves.
+export function flatItems(items) {
+  const out = [];
+  (items || []).forEach((it) => {
+    if (it.kind === "group") out.push(...flatItems(it.children));
+    else out.push(it);
+  });
+  return out;
+}
+
 function tierClass(it) {
   const t = String(it.tier || "work");
   return "t-" + (t === "flex" || t === "fun" ? "flex" : t);
@@ -248,7 +262,8 @@ function timeline(date) {
       : slot.t + '<span class="hrs">' + String(slot.from).padStart(2, "0") + "-" +
         String(slot.to).padStart(2, "0") + "</span>"));
     // payload order is authoritative inside every band, the pool included
-    items.filter((it) => it.t === slot.t).forEach((it) => sec.appendChild(row(date, it)));
+    items.filter((it) => it.t === slot.t)
+      .forEach((it) => sec.appendChild(it.kind === "group" ? groupRow(date, it) : row(date, it)));
     wrap.appendChild(sec);
   });
 
@@ -327,6 +342,35 @@ function row(date, it) {
     det.hidden = !det.hidden;
     r.classList.toggle("open", !det.hidden);
   });
+  return r;
+}
+
+// One row, children hidden behind it, collapsed on arrival: closed means ALL
+// subcategories hidden, so the day reads on one screen (David, 2026-08-17).
+// The group row itself has no checkbox; its count and done state are derived
+// from the leaves, and a change event bubbling out of any child repaints it.
+function groupRow(date, it) {
+  const r = el("div", { class: "tl-row tl-group " + tierClass(it) });
+  const leaves = flatItems([it]);
+  const lab = el("button", { type: "button", class: "tl-lab", "data-more": "1" }, md(it.label));
+  const count = el("span", { class: "gcount" }, "");
+  const kids = el("div", { class: "tl-kids" });
+  kids.hidden = true;
+  (it.children || []).forEach((k) => kids.appendChild(k.kind === "group" ? groupRow(date, k) : row(date, k)));
+  const paintCount = () => {
+    const done = leaves.filter((k) => doneMap[k.id]).length;
+    count.textContent = done + " of " + leaves.length;
+    r.classList.toggle("done", leaves.length > 0 && done === leaves.length);
+  };
+  kids.addEventListener("change", paintCount);
+  lab.addEventListener("click", () => {
+    kids.hidden = !kids.hidden;
+    r.classList.toggle("open", !kids.hidden);
+  });
+  r.appendChild(lab);
+  r.appendChild(count);
+  r.appendChild(kids);
+  paintCount();
   return r;
 }
 
@@ -737,42 +781,5 @@ function legacyBoard() {
   return app;
 }
 
-function renderCapture() {
-  const box = el("section", { class: "capture" });
-  box.appendChild(el("h2", {}, "🪞 Tell Crystal"));
-  box.appendChild(el("p", { class: "hint" },
-    "Type it and let it go. It lands in the vault with the morning pull."));
-  const ta = document.createElement("textarea");
-  ta.placeholder = "A thought, a task, a thing to file...";
-  ta.setAttribute("aria-label", "Tell Crystal");
-  box.appendChild(ta);
-  const row = el("div", { class: "row" });
-  const stat = el("span", { class: "stat" }, "");
-  const send = el("button", { type: "button", class: "send" }, "Send");
-  const list = el("ul", { class: "caplist", id: "caplist" });
-  const paint = () => {
-    list.innerHTML = "";
-    lsGet("brief.caps." + todayIso(), []).slice(-6).reverse().forEach((c) => {
-      const li = el("li", {});
-      li.appendChild(el("span", { class: "at" }, (c.sent ? "✓" : "…") + " " + (c.at || "").slice(11, 16)));
-      li.appendChild(el("span", {}, md(c.text.length > 90 ? c.text.slice(0, 90) + "..." : c.text)));
-      list.appendChild(li);
-    });
-  };
-  list.addEventListener("caps-changed", paint);
-  send.addEventListener("click", () => {
-    const text = ta.value.trim();
-    if (!text) return;
-    queueCapture(text);
-    ta.value = "";
-    stat.textContent = "captured";
-    setTimeout(() => { stat.textContent = ""; }, 2500);
-    paint();
-  });
-  row.appendChild(stat);
-  row.appendChild(send);
-  box.appendChild(row);
-  paint();
-  box.appendChild(list);
-  return box;
-}
+// "Tell Crystal" used to live here; the floating bubble on every tab is the
+// write side now, and the Desk board (desk.js boardSection) took this spot.

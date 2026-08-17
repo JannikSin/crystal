@@ -31,7 +31,10 @@
 // v17: the bubble (app.js + .bubble CSS), Career reps archive (career.js +
 //      .repslist CSS), grades moved off the Today board. Paired changes.
 // v18: the mic in the bubble (app.js + .mic CSS, sync.js deskaudio kind).
-const CACHE = "crystal-v18";
+// v19: the Desk tab is gone (index.html + app.js + desk.js rewritten as
+//      Today's foot board), Tell Crystal removed from today.js, timeline
+//      groups (.tl-group/.tl-kids CSS pairs with today.js). Paired changes.
+const CACHE = "crystal-v19";
 
 const PRECACHE = [
   "./",

@@ -1,6 +1,8 @@
-// desk.js: the idea inbox. Zero decisions at capture time: one box, one Send,
-// and the note is on its way to the hourly drain. Below it, the derived board
-// the laptop pushes, with approve for tickets sitting in review.
+// desk.js: the Desk board, rendered at the foot of the Today tab (the Desk TAB
+// is gone, David 2026-08-17: the floating bubble is the write side everywhere,
+// and a captured fix is a thing for TODAY, so the read side lives there too).
+// This module keeps the derived board the laptop pushes, with approve for
+// tickets sitting in review.
 //
 // The approve secret is typed per session and held in a module variable only:
 // no localStorage, no IndexedDB, no remember-me. It defends the key at rest;
@@ -11,8 +13,7 @@
 // innerHTML arg: titles start life as phone notes run through a model, and an
 // injected tag here sits next to the approve secret field.
 
-import { root, el, lsGet, todayIso, fmtBuilt, appFooter, WORKER, key, isTab } from "./core.js";
-import { queueDesk } from "./sync.js";
+import { el, fmtBuilt, WORKER, key, isTab } from "./core.js";
 
 let approveSecret = ""; // session-only, never persisted
 const actedLocally = new Set(); // ids approved/rejected this session; the board
@@ -35,44 +36,6 @@ function txt(tag, attrs, text) {
   const e = el(tag, attrs);
   e.textContent = text;
   return e;
-}
-
-function renderCapture() {
-  const box = el("section", { class: "capture" });
-  box.appendChild(el("h2", {}, "🗃️ The Desk"));
-  box.appendChild(el("p", { class: "hint" },
-    "Drop the idea and keep walking. The hourly drain sorts out what it is."));
-  const ta = document.createElement("textarea");
-  ta.rows = 3;
-  ta.placeholder = "the Money dial is showing two dashes for TOST...";
-  box.appendChild(ta);
-  const row = el("div", { class: "row" });
-  const stat = el("span", { class: "stat" }, "");
-  const send = el("button", { type: "button", class: "send" }, "Send");
-  const list = el("ul", { class: "caplist", id: "desklist" });
-  const paint = () => {
-    list.innerHTML = "";
-    lsGet("desk.notes." + todayIso(), []).slice(-6).reverse().forEach((n) => {
-      list.appendChild(txt("li", {}, (n.sent ? "✓ " : "· ") + n.text));
-    });
-  };
-  list.addEventListener("desk-changed", paint);
-  send.addEventListener("click", () => {
-    const text = ta.value.trim();
-    if (!text) return;
-    const saved = queueDesk(text);
-    if (!saved) { stat.textContent = "NOT saved on this phone, storage full"; return; }
-    ta.value = "";
-    stat.textContent = "on the desk";
-    setTimeout(() => { stat.textContent = ""; }, 2500);
-    paint();
-  });
-  row.appendChild(send);
-  row.appendChild(stat);
-  box.appendChild(row);
-  box.appendChild(list);
-  paint();
-  return box;
 }
 
 function approveControls(t, onDone) {
@@ -151,30 +114,25 @@ function ticketCard(t, repaint) {
   return card;
 }
 
-export function open() {
-  root.appendChild(renderCapture());
-  const holder = el("div", {});
+// The section Today appends at its foot. Returns an empty, self-filling
+// container: an empty or unreachable board renders NOTHING, because the Today
+// screen's whole doctrine is minimal, and a "board empty" line every day is
+// noise about work that does not exist.
+export function boardSection() {
+  const sec = el("div", {});
   const paint = () => {
     fetch(WORKER + "/desk", { headers: { "x-brief-key": key() } })
       .then((r) => (r.ok ? r.json() : null))
       .then((board) => {
-        if (!isTab("desk")) return;
-        holder.innerHTML = "";
-        if (!board || !Array.isArray(board.tickets) || !board.tickets.length) {
-          holder.appendChild(el("p", { class: "hint" },
-            board && board.built ? "board empty · " + fmtBuilt(board.built) : "no board yet"));
-          return;
-        }
-        board.tickets.forEach((t) => holder.appendChild(ticketCard(t, paint)));
-        if (board.built) holder.appendChild(el("p", { class: "hint" }, fmtBuilt(board.built)));
+        if (!isTab("today")) return;
+        sec.innerHTML = "";
+        if (!board || !Array.isArray(board.tickets) || !board.tickets.length) return;
+        sec.appendChild(el("h2", { class: "deskhead" }, "🗃️ On the desk"));
+        board.tickets.forEach((t) => sec.appendChild(ticketCard(t, paint)));
+        if (board.built) sec.appendChild(el("p", { class: "hint" }, fmtBuilt(board.built)));
       })
-      .catch(() => {
-        if (!isTab("desk")) return;
-        holder.innerHTML = ""; // clear first, or repeated offline taps stack lines
-        holder.appendChild(el("p", { class: "hint" }, "board unreachable"));
-      });
+      .catch(() => {});
   };
-  root.appendChild(holder);
-  root.appendChild(appFooter(paint));
   paint();
+  return sec;
 }

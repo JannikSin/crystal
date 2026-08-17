@@ -223,22 +223,45 @@ export function validateBriefV2(p) {
   }
   if (!isArr(p.timeline)) return "timeline must be an array";
   if (p.timeline.length > 40) return "timeline: more than 40 items, that is not a day";
+  // kind "group" holds child items (Morning routine > Supplements). Children
+  // need no slot or tier (they render inside the group's row); groups nest at
+  // most one level deep and every id is unique across the whole tree.
   const seen = new Set();
-  for (let i = 0; i < p.timeline.length; i++) {
-    const it = p.timeline[i];
-    const at = `timeline[${i}]`;
+  let total = 0;
+  const validateItem = (it, at, depth) => {
+    if (++total > 60) return "timeline: more than 60 items counting group children";
     if (!it || typeof it !== "object") return `${at} must be an object`;
     if (!ID_RE.test(it.id || "")) return `${at}.id must match ${ID_RE}`;
     if (seen.has(it.id)) return `${at}.id "${it.id}" is a duplicate`;
     seen.add(it.id);
-    if (!SLOTS.includes(it.t)) return `${at}.t must be one of ${SLOTS.join("|")}`;
+    if (depth === 0 && !SLOTS.includes(it.t)) return `${at}.t must be one of ${SLOTS.join("|")}`;
+    if (depth > 0 && it.t !== undefined && !SLOTS.includes(it.t))
+      return `${at}.t must be one of ${SLOTS.join("|")}`;
     if (!isTxt(it.label)) return `${at}.label required`;
-    if (!TIERS.includes(it.tier)) return `${at}.tier must be one of ${TIERS.join("|")}`;
+    if (depth === 0 && !TIERS.includes(it.tier)) return `${at}.tier must be one of ${TIERS.join("|")}`;
+    if (depth > 0 && it.tier !== undefined && !TIERS.includes(it.tier))
+      return `${at}.tier must be one of ${TIERS.join("|")}`;
     for (const f of ["kind", "target", "section", "qid", "detail", "ticklabel"])
       if (it[f] !== undefined && !isStr(it[f])) return `${at}.${f} must be a string`;
     for (const f of ["floor", "state"])
       if (it[f] !== undefined && typeof it[f] !== "boolean")
         return `${at}.${f} must be a boolean`;
+    if (it.kind === "group") {
+      if (depth >= 2) return `${at}: groups nest at most two levels`;
+      if (!isArr(it.children) || !it.children.length) return `${at}.children must be a non-empty array`;
+      if (it.children.length > 15) return `${at}.children: more than 15`;
+      for (let j = 0; j < it.children.length; j++) {
+        const bad = validateItem(it.children[j], `${at}.children[${j}]`, depth + 1);
+        if (bad) return bad;
+      }
+    } else if (it.children !== undefined) {
+      return `${at}.children only allowed on kind "group"`;
+    }
+    return null;
+  };
+  for (let i = 0; i < p.timeline.length; i++) {
+    const bad = validateItem(p.timeline[i], `timeline[${i}]`, 0);
+    if (bad) return bad;
   }
   return null;
 }

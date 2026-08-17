@@ -22,11 +22,23 @@ const word = (n) => WORDS[n] || String(n);
 // caller. latch: {daily, full} read from localStorage. swapIdx: ephemeral.
 // now: the clock, injected so the 22:00 expiry is testable.
 // Returns {lines:[], pick:{text, swappable}|null, latch:{daily, full}}.
+// group rows (kind "group") hold their real items in children; what the day
+// owes is the leaves. Mirrors flatItems in today.js, duplicated so this file
+// stays DOM-free and node-testable with no imports.
+function flat(items) {
+  const out = [];
+  (items || []).forEach((it) => {
+    if (it.kind === "group") out.push(...flat(it.children));
+    else out.push(it);
+  });
+  return out;
+}
+
 export function computeReward(payload, doneMap, latch, swapIdx, now) {
   const out = { lines: [], pick: null, latch: { daily: false, full: false } };
   if (!payload || payload.v !== 2) return out;
   const r = payload.reward || null;
-  const items = Array.isArray(payload.timeline) ? payload.timeline : [];
+  const items = flat(Array.isArray(payload.timeline) ? payload.timeline : []);
   const done = (it) => !!(doneMap && doneMap[it.id]);
 
   const floor = items.filter((it) => it.floor === true);

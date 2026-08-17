@@ -203,6 +203,30 @@ assert.match(
   validateBriefV2({ ...goodBrief, scanThumb: "data:image/jpeg;base64," + "A".repeat(41000) }),
   /40KB/,
 );
+// groups: one row holding children (Morning routine > Supplements)
+const grp = (over = {}) => ({
+  id: "morning-routine", t: "dawn", label: "Morning routine", tier: "spine",
+  kind: "group",
+  children: [
+    { id: "body-weigh", label: "Weigh in", kind: "task", state: false },
+    { id: "supplements", label: "Supplements", kind: "group",
+      children: [{ id: "supp-creatine", label: "creatine 5 g", kind: "task" }] },
+  ],
+  ...over,
+});
+assert.equal(validateBriefV2({ ...goodBrief, timeline: [tl(), grp()] }), null,
+  "a nested group must pass");
+assert.match(validateBriefV2({ ...goodBrief, timeline: [grp({ children: [] })] }), /children/);
+assert.match(validateBriefV2({ ...goodBrief, timeline: [tl({ children: [] })] }), /children only/);
+assert.match(
+  validateBriefV2({ ...goodBrief, timeline: [tl(), grp({ children: [{ id: (tl()).id, label: "dup" }] })] }),
+  /duplicate/,
+);
+const tooDeep = grp();
+tooDeep.children[1].children[0] = { id: "supp-deep", label: "x", kind: "group",
+  children: [{ id: "supp-deeper", label: "y" }] };
+assert.match(validateBriefV2({ ...goodBrief, timeline: [tooDeep] }), /nest/);
+
 const brokenWindow = JSON.parse(JSON.stringify(goodBrief));
 brokenWindow.reward.heldWindow[0].d = "Wednesday";
 assert.match(validateBriefV2(brokenWindow), /heldWindow\[0\]\.d/);

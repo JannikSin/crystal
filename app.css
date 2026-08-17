@@ -233,6 +233,12 @@ label.tk input:disabled+.box{opacity:.35}
 .tl-detail h4{margin:.5rem 0 .2rem;font-size:.95rem;color:var(--ink)}
 .tl-detail ul{margin:.4rem 0;padding-left:1.1rem}
 .tl-detail strong{color:var(--ink)}
+/* a group row: one label, a dim count, children folded underneath */
+.tl-group .gcount{font-family:var(--mono);font-size:.7rem;color:var(--dim);
+  white-space:nowrap;padding-top:3px}
+.tl-kids{flex:1 0 100%;margin:2px 0 6px 6px;padding-left:12px;border-left:1px solid var(--edge)}
+.tl-kids .tl-row{padding:5px 0}
+.tl-kids .tl-row::before{display:none}
 .tl-now{position:absolute;left:10px;right:0;height:0;border-top:1px dashed var(--gold);
   pointer-events:none}
 .tl-now b{position:absolute;left:0;top:-8px;width:9px;height:9px;border-radius:99px;
@@ -889,8 +895,12 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
 .bubblepanel{position:fixed;right:14px;bottom:130px;z-index:40;width:min(340px,calc(100vw - 28px));
   background:var(--card);border:1px solid var(--edge);border-radius:14px;
   box-shadow:var(--shadow);padding:10px}
-.bubblepanel textarea{width:100%;min-height:84px;border:1px solid var(--edge);border-radius:10px;
+/* grows with the text (app.js input handler) so a long dictated note stays
+   reviewable; past the cap the textarea scrolls itself with momentum */
+.bubblepanel textarea{width:100%;min-height:84px;max-height:45vh;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;border:1px solid var(--edge);border-radius:10px;
   font-size:16px;color:var(--ink);background:var(--bg);padding:8px;resize:vertical}
+.deskhead{margin:26px 0 4px;font-size:1.05rem}
 .bubblepanel .row{display:flex;align-items:center;gap:10px;margin-top:6px}
 .bubblepanel .stat{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-left:auto}
 .bubblepanel .send{padding:7px 16px;border-radius:99px;border:1px solid var(--edge);
