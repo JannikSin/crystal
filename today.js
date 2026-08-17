@@ -347,29 +347,73 @@ function row(date, it) {
 
 // One row, children hidden behind it, collapsed on arrival: closed means ALL
 // subcategories hidden, so the day reads on one screen (David, 2026-08-17).
-// The group row itself has no checkbox; its count and done state are derived
-// from the leaves, and a change event bubbling out of any child repaints it.
-function groupRow(date, it) {
+// The counter counts DIRECT children only, a nested group counting as one of
+// them (done when every leaf inside it is done); the nested group carries its
+// own "n of m". A NESTED group also gets a real checkbox: derived when its
+// leaves are ticked one by one, and ticking IT cascades to every leaf ("end
+// of the day, I know I took all of my supplements", one tap). The top-level
+// group row stays checkbox-free; a stray tap there would claim the whole
+// morning.
+function groupRow(date, it, nested) {
   const r = el("div", { class: "tl-row tl-group " + tierClass(it) });
+  const kids = it.children || [];
   const leaves = flatItems([it]);
   const lab = el("button", { type: "button", class: "tl-lab", "data-more": "1" }, md(it.label));
   const count = el("span", { class: "gcount" }, "");
-  const kids = el("div", { class: "tl-kids" });
-  kids.hidden = true;
-  (it.children || []).forEach((k) => kids.appendChild(k.kind === "group" ? groupRow(date, k) : row(date, k)));
-  const paintCount = () => {
-    const done = leaves.filter((k) => doneMap[k.id]).length;
-    count.textContent = done + " of " + leaves.length;
-    r.classList.toggle("done", leaves.length > 0 && done === leaves.length);
+  const kidsBox = el("div", { class: "tl-kids" });
+  kidsBox.hidden = true;
+  let box = null;
+
+  const childDone = (k) =>
+    k.kind === "group" ? flatItems([k]).every((x) => !!doneMap[x.id]) : !!doneMap[k.id];
+  const paintKids = () => {
+    kidsBox.innerHTML = "";
+    kids.forEach((k) => kidsBox.appendChild(k.kind === "group" ? groupRow(date, k, true) : row(date, k)));
   };
-  kids.addEventListener("change", paintCount);
+  const paintCount = () => {
+    const n = kids.filter(childDone).length;
+    count.textContent = n + " of " + kids.length;
+    const all = kids.length > 0 && n === kids.length;
+    r.classList.toggle("done", all);
+    if (box) box.checked = all;
+  };
+
+  if (nested) {
+    const tick = el("label", { class: "tk" });
+    box = document.createElement("input");
+    box.type = "checkbox";
+    box.setAttribute("aria-label", it.label + ", all of them");
+    box.addEventListener("change", () => {
+      const on = box.checked;
+      leaves.forEach((k) => {
+        if (!!doneMap[k.id] === on) return;
+        setTick(date, k.id, on, {
+          kind: k.kind || "task", section: k.section || "",
+          label: k.ticklabel || k.label, target: k.target || "",
+        });
+        doneMap[k.id] = on;
+      });
+      paintKids();
+      paintCount();
+      paintMeter();
+      paintReward();
+    });
+    tick.appendChild(box);
+    tick.appendChild(el("span", { class: "box" },
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>'));
+    r.appendChild(tick);
+  }
+
+  // any tick anywhere below bubbles a change event up through this container
+  kidsBox.addEventListener("change", paintCount);
   lab.addEventListener("click", () => {
-    kids.hidden = !kids.hidden;
-    r.classList.toggle("open", !kids.hidden);
+    kidsBox.hidden = !kidsBox.hidden;
+    r.classList.toggle("open", !kidsBox.hidden);
   });
   r.appendChild(lab);
   r.appendChild(count);
-  r.appendChild(kids);
+  r.appendChild(kidsBox);
+  paintKids();
   paintCount();
   return r;
 }

@@ -83,7 +83,16 @@ function ticketCard(t, repaint) {
   const card = el("section", { class: "capture" });
   card.appendChild(txt("div", { class: "eyebrow" },
     (t.intent || "?") + " · " + (t.target || "?") + " · " + (STATE_LABEL[t.state] || t.state)));
-  card.appendChild(txt("h2", {}, t.title || t.id));
+  const title = txt("h2", {}, t.title || t.id);
+  card.appendChild(title);
+  // tap the title, see the prompt that raised the ticket (David, 2026-08-17)
+  if (t.note) {
+    title.classList.add("hasnote");
+    const note = txt("blockquote", { class: "ticketnote" }, t.note);
+    note.hidden = true;
+    card.appendChild(note);
+    title.addEventListener("click", () => { note.hidden = !note.hidden; });
+  }
   if (t.triage === "default")
     card.appendChild(txt("p", { class: "hint" },
       "filed without the model (budget was spent); it re-sorts on the next funded drain"));

@@ -34,7 +34,10 @@
 // v19: the Desk tab is gone (index.html + app.js + desk.js rewritten as
 //      Today's foot board), Tell Crystal removed from today.js, timeline
 //      groups (.tl-group/.tl-kids CSS pairs with today.js). Paired changes.
-const CACHE = "crystal-v19";
+// v20: group counter counts direct children, nested groups get a cascading
+//      checkbox (today.js), ticket cards reveal the raising prompt
+//      (desk.js + .ticketnote CSS). Paired changes.
+const CACHE = "crystal-v20";
 
 const PRECACHE = [
   "./",

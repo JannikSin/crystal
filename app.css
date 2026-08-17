@@ -901,6 +901,11 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
   -webkit-overflow-scrolling:touch;border:1px solid var(--edge);border-radius:10px;
   font-size:16px;color:var(--ink);background:var(--bg);padding:8px;resize:vertical}
 .deskhead{margin:26px 0 4px;font-size:1.05rem}
+/* tap a ticket title, see the prompt that raised it */
+.capture h2.hasnote{cursor:pointer}
+.capture h2.hasnote::after{content:" ⌄";color:var(--faint);font-size:.8em}
+.ticketnote{margin:6px 0;padding-left:10px;border-left:2px solid var(--edge);
+  color:var(--dim);font-size:.9rem;white-space:pre-wrap}
 .bubblepanel .row{display:flex;align-items:center;gap:10px;margin-top:6px}
 .bubblepanel .stat{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-left:auto}
 .bubblepanel .send{padding:7px 16px;border-radius:99px;border:1px solid var(--edge);
