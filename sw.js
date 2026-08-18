@@ -39,7 +39,11 @@
 //      (desk.js + .ticketnote CSS). Paired changes.
 // v22: Career tab gains the outreach tracker (career.js + app.css), sitting
 //      right below the work order and above interview reps (David, 2026-08-17).
-const CACHE = "crystal-v22";
+// v23: all three halves of bolt land in the Shop tab (David, 2026-08-18).
+//      shopping.js paintBolt rewritten, new .bsub/.find/.killed/.promo CSS,
+//      and the Worker now MERGES /bolt posts. The CSS and the module must
+//      land together or the scout block renders unstyled.
+const CACHE = "crystal-v23";
 
 const PRECACHE = [
   "./",

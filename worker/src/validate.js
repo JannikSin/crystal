@@ -329,7 +329,7 @@ export function validateListen(p) {
 // ---------- career ----------
 // {built, spotlight?:{rank, name, facet, text}, roster:[same], cap 40,
 //  outreach?:{name, body, tickId}, signals?:{date, items[]}, aeroDated?,
-//  tracker?:[{to, org, ask, from, due, action, status, kind}]}
+//  tracker?:[{to, org, ask, from, due, action, status, kind, sendNow?, id?}]}
 function validateCompany(c, at) {
   if (!c || typeof c !== "object") return `${at} must be an object`;
   if (!isNum(c.rank)) return `${at}.rank must be a number`;
@@ -375,6 +375,8 @@ export function validateCareer(p) {
       if (!isTxt(t.to)) return `tracker[${i}].to required`;
       if (!isStr(t.org) || !isStr(t.ask) || !isStr(t.status))
         return `tracker[${i}].org/ask/status must be strings`;
+      if (t.sendNow !== undefined && typeof t.sendNow !== "boolean")
+        return `tracker[${i}].sendNow must be a boolean`;
     }
   }
   return null;
@@ -520,6 +522,57 @@ export function validateShopping(p) {
       if (!t || typeof t !== "object") return `totals[${i}] must be an object`;
       if (!isTxt(t.label)) return `totals[${i}].label required`;
       if (!isNum(t.amount)) return `totals[${i}].amount must be a number`;
+    }
+  }
+  return null;
+}
+
+// ---------- bolt ----------
+// The clothing agent posts in three independent halves and the Worker merges
+// them, so this validates whichever half arrived rather than a whole object.
+// The strip is a read-only mirror on the phone; the cost of garbage here is a
+// broken Shop tab, so every field the renderer touches is checked.
+export function validateBolt(p) {
+  if (p.tracked !== undefined && !isNum(p.tracked)) return "tracked must be a number";
+  if (p.week !== undefined) {
+    if (!isArr(p.week)) return "week must be an array";
+    if (p.week.length > 40) return "week: more than 40 alerts is not a quiet week";
+    for (let i = 0; i < p.week.length; i++) {
+      const w = p.week[i];
+      if (!w || typeof w !== "object") return `week[${i}] must be an object`;
+      if (!isStr(w.title) && !isStr(w.key)) return `week[${i}] needs title or key`;
+      if (w.url !== undefined && !isStr(w.url)) return `week[${i}].url must be a string`;
+    }
+  }
+  if (p.errors !== undefined && !isArr(p.errors)) return "errors must be an array";
+  if (p.promos !== undefined) {
+    if (!isArr(p.promos)) return "promos must be an array";
+    if (p.promos.length > 40) return "promos: more than 40";
+    for (let i = 0; i < p.promos.length; i++) {
+      const c = p.promos[i];
+      if (!c || typeof c !== "object") return `promos[${i}] must be an object`;
+      if (!isTxt(c.store)) return `promos[${i}].store required`;
+      if (!isTxt(c.code)) return `promos[${i}].code required`;
+    }
+  }
+  if (p.digest !== undefined) {
+    const d = p.digest;
+    if (!d || typeof d !== "object") return "digest must be an object";
+    if (d.headline !== undefined && !isStr(d.headline)) return "digest.headline must be a string";
+    if (d.finds !== undefined) {
+      if (!isArr(d.finds)) return "digest.finds must be an array";
+      if (d.finds.length > 30) return "digest.finds: more than 30 is a firehose, not a digest";
+      for (let i = 0; i < d.finds.length; i++) {
+        const f = d.finds[i];
+        if (!f || typeof f !== "object") return `digest.finds[${i}] must be an object`;
+        if (!isTxt(f.title)) return `digest.finds[${i}].title required`;
+        if (f.price !== undefined && !isNum(f.price)) return `digest.finds[${i}].price must be a number`;
+        if (f.url !== undefined && !isStr(f.url)) return `digest.finds[${i}].url must be a string`;
+      }
+    }
+    if (d.killed !== undefined) {
+      if (!isArr(d.killed)) return "digest.killed must be an array";
+      if (d.killed.length > 30) return "digest.killed: more than 30";
     }
   }
   return null;

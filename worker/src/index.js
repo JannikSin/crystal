@@ -74,6 +74,7 @@ import {
   validateListen,
   validateCareer,
   validateShopping,
+  validateBolt,
   validateFeedback,
   DATE_RE,
   TICKER_RE,
@@ -791,13 +792,32 @@ export default {
       return raw200(raw);
     }
 
+    // TWO producers write here and neither owns the whole object: the watcher
+    // (half A) posts {built,tracked,week,errors} every six hours, the scout
+    // (half B) posts {digestBuilt,digest} weekly, and the promo hunter (half C)
+    // posts {promoBuilt,promos}. A plain put let whichever ran last erase the
+    // others, so this merges top-level keys instead.
     if (path === "/bolt" && method === "POST") {
-      const { raw, body, err } = await readBody(request);
+      const { body, err } = await readBody(request);
       if (err) return err;
-      if (!body || typeof body !== "object" || typeof body.built !== "string")
-        return json(400, { error: "bolt payload needs built (ISO string)" });
-      await env.STORE.put("bolt:latest", raw);
-      return json(200, { ok: true, tracked: body.tracked ?? 0 });
+      // `built` is specifically the WATCHER's last check, and the strip prints
+      // it as "checked 3h ago". Only the watcher may set it: if the weekly
+      // scout stamped it too, a Sunday digest would make a dead watcher look
+      // alive. Each half timestamps its own half.
+      const stamps = ["built", "digestBuilt", "promoBuilt"];
+      if (!body || typeof body !== "object" || !stamps.some((s) => typeof body[s] === "string"))
+        return json(400, { error: `bolt payload needs one of ${stamps.join(", ")} (ISO string)` });
+      const bad = validateBolt(body);
+      if (bad) return json(400, { error: bad });
+      let prev = {};
+      try { prev = JSON.parse((await env.STORE.get("bolt:latest")) || "{}") || {}; } catch { prev = {}; }
+      const merged = { ...prev, ...body };
+      const out = JSON.stringify(merged);
+      if (out.length > 120000) return json(413, { error: "merged bolt payload over 120k" });
+      await env.STORE.put("bolt:latest", out);
+      return json(200, { ok: true, tracked: merged.tracked ?? 0,
+                         finds: (merged.digest?.finds || []).length,
+                         promos: (merged.promos || []).length });
     }
 
     // ---------- scan: yesterday's handwritten list, raw JPEG ----------

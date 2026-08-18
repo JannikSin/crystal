@@ -114,33 +114,120 @@ function render(data, note, empty) {
   root.appendChild(appFooter(() => loadCached("/shopping", "crystal.shopping", render, true)));
 }
 
-// The strip answers exactly two questions standing in the app: is the watcher
-// alive, and did it find anything this week. A quiet week renders as a good
-// thing on purpose; that is bolt's whole design contract.
+// Bolt has three halves and all three land here, because David asked to open
+// one tab and see everything the agent produced (2026-08-18):
+//
+//   A  the WATCHER, every 6 hours, deterministic. Heartbeat plus this week's
+//      alerts. A quiet week renders as a good thing on purpose; that is bolt's
+//      whole design contract.
+//   B  the SCOUT, weekly, exploratory. Named picks with prices and sizes, and
+//      the items it deliberately killed, which is the half that shows the
+//      agent exercising judgement rather than forwarding sales.
+//   C  the PROMO hunter. Codes validated against the store's own cart, so a
+//      code shown here actually moved a total, it is not a coupon-site guess.
+//
+// Every row that has a product URL is a link. The old strip printed titles you
+// could not tap, which made it a status light rather than a shopping tool.
+// Everything rendered here is text run through md(), which escapes < & > first,
+// so titles are safe. An href is NOT: it is the one place a payload string
+// becomes executable, and "javascript:..." in a product url would run on tap.
+// http and https only, and a bad url degrades to a plain row rather than
+// dropping the find.
+function safeUrl(u) {
+  if (typeof u !== "string") return null;
+  return /^https?:\/\//i.test(u.trim()) ? u.trim() : null;
+}
+
+function boltRow(cls, bits, rawUrl) {
+  const url = safeUrl(rawUrl);
+  const r = el(url ? "a" : "div", url
+    ? { class: cls, href: url, target: "_blank", rel: "noopener" }
+    : { class: cls });
+  bits.filter(Boolean).forEach((b) => r.appendChild(b));
+  return r;
+}
+
 function paintBolt(box, d) {
-  if (!box.isConnected || !d || !d.built) return;
+  // Any one half is enough to draw the card. Gating on `built` alone meant a
+  // scout digest could not show until the watcher had also reported.
+  if (!box.isConnected || !d || !(d.built || d.digestBuilt || d.promoBuilt)) return;
   box.innerHTML = "";
   const head = el("div", { class: "bh" });
   head.appendChild(el("span", { class: "t" }, "⚡ bolt"));
-  const age = Date.now() - Date.parse(d.built);
+  const age = d.built ? Date.now() - Date.parse(d.built) : NaN;
   const h = Math.floor(age / 3600000);
   head.appendChild(el("span", { class: "age" },
-    age < 0 || Number.isNaN(age) ? "" : h < 1 ? "checked just now" : h < 48 ? `checked ${h}h ago` : "STALE, check the repo"));
+    Number.isNaN(age) ? "watcher has not reported" : age < 0 ? ""
+      : h < 1 ? "checked just now" : h < 48 ? `checked ${h}h ago` : "STALE, check the repo"));
   head.appendChild(el("span", { class: "n" }, (d.tracked || 0) + " watched"));
   box.appendChild(head);
 
+  // ---- A: the watcher's week
   const week = Array.isArray(d.week) ? d.week : [];
   if (!week.length) {
-    box.appendChild(el("div", { class: "quiet" }, "Quiet week. Nothing cleared the bar, which is the plan working."));
+    box.appendChild(el("div", { class: "quiet" }, "Quiet week from the watcher. Nothing cleared the bar, which is the plan working."));
   } else {
-    week.slice(-3).reverse().forEach((w) => {
-      const r = el("div", { class: "hit" });
-      r.appendChild(el("span", { class: "d" }, String(w.date || "").slice(5)));
-      r.appendChild(el("span", { class: "w" }, md(String(w.title || w.key || ""))));
-      if (w.price) r.appendChild(el("span", { class: "p" }, "$" + w.price));
+    week.slice(-6).reverse().forEach((w) => {
+      box.appendChild(boltRow("hit", [
+        el("span", { class: "d" }, String(w.date || "").slice(5)),
+        el("span", { class: "w" }, md(String(w.title || w.key || ""))),
+        w.size ? el("span", { class: "sz" }, String(w.size)) : null,
+        w.price ? el("span", { class: "p" }, "$" + w.price) : null,
+      ], w.url));
+    });
+  }
+
+  // ---- B: the scout's week
+  const dg = d.digest || {};
+  const finds = Array.isArray(dg.finds) ? dg.finds : [];
+  if (dg.headline || finds.length) {
+    const sh = el("div", { class: "bsub" });
+    sh.appendChild(el("span", { class: "t" }, "scout"));
+    if (d.digestBuilt) sh.appendChild(el("span", { class: "age" }, String(d.digestBuilt).slice(0, 10)));
+    box.appendChild(sh);
+    if (dg.headline) box.appendChild(el("p", { class: "bnote" }, md(String(dg.headline))));
+    finds.forEach((f) => {
+      box.appendChild(boltRow("find", [
+        el("span", { class: "w" }, md(String(f.title || ""))),
+        f.size ? el("span", { class: "sz" }, String(f.size)) : null,
+        typeof f.price === "number" ? el("span", { class: "p" }, "$" + f.price.toFixed(2)) : null,
+        typeof f.was === "number" ? el("span", { class: "was" }, "$" + f.was.toFixed(0)) : null,
+      ], f.url));
+      if (f.why) box.appendChild(el("div", { class: "why" }, md(String(f.why))));
+    });
+    // The kills are the point, not filler: they are the agent refusing to sell
+    // him something, with the rule it applied.
+    (Array.isArray(dg.killed) ? dg.killed : []).forEach((k) => {
+      box.appendChild(el("div", { class: "killed" },
+        md(String(k.title || "")) + (k.why ? " — " + md(String(k.why)) : "")));
+    });
+    if (dg.uncovered) box.appendChild(el("div", { class: "err" }, md(String(dg.uncovered))));
+  }
+
+  // ---- C: promo codes
+  const promos = Array.isArray(d.promos) ? d.promos : [];
+  if (promos.length) {
+    const ph = el("div", { class: "bsub" });
+    ph.appendChild(el("span", { class: "t" }, "codes that actually work"));
+    if (d.promoBuilt) ph.appendChild(el("span", { class: "age" }, String(d.promoBuilt).slice(0, 10)));
+    box.appendChild(ph);
+    promos.forEach((c) => {
+      const r = el("div", { class: "promo" });
+      r.appendChild(el("span", { class: "store" }, md(String(c.store))));
+      const code = el("button", { class: "code", type: "button" }, String(c.code));
+      // Tap copies. Pasting a code by hand off a phone screen is the whole
+      // friction this replaces.
+      code.onclick = () => {
+        navigator.clipboard?.writeText(String(c.code));
+        code.textContent = "copied";
+        setTimeout(() => { code.textContent = String(c.code); }, 1200);
+      };
+      r.appendChild(code);
+      if (c.pct) r.appendChild(el("span", { class: "p" }, "-" + c.pct + "%"));
       box.appendChild(r);
     });
   }
+
   if (Array.isArray(d.errors) && d.errors.length) {
     box.appendChild(el("div", { class: "err" }, d.errors.length + " source" + (d.errors.length > 1 ? "s" : "") + " erroring: " + md(String(d.errors[0]).slice(0, 80))));
   }

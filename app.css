@@ -806,6 +806,32 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
 .boltstrip .hit .w{color:var(--ink)}
 .boltstrip .hit .p{margin-left:auto;font-family:var(--mono);font-size:.85rem;color:var(--ink)}
 .boltstrip .err{margin-top:6px;font-size:.8rem;color:var(--warn)}
+/* 2026-08-18: all three halves of bolt render here, so a hit is now a LINK and
+   the scout and promo blocks sit under the watcher's week. a.hit must inherit
+   the row layout or the anchor collapses to inline text. */
+.boltstrip a.hit,.boltstrip a.find{text-decoration:none}
+.boltstrip .hit .sz,.boltstrip .find .sz{font-family:var(--mono);font-size:.7rem;color:var(--faint)}
+.boltstrip .bsub{display:flex;align-items:baseline;gap:9px;margin-top:12px;
+  padding-top:9px;border-top:1px solid var(--edge);font-family:var(--mono);
+  font-size:.6rem;letter-spacing:.18em;text-transform:uppercase}
+.boltstrip .bsub .t{color:var(--dim);font-weight:600}
+.boltstrip .bsub .age{margin-left:auto;color:var(--faint)}
+.boltstrip .bnote{margin:6px 0 2px;font-family:var(--serif);font-size:.92rem;color:var(--dim)}
+.boltstrip .find{display:flex;gap:8px;align-items:baseline;margin-top:7px;font-size:.92rem}
+.boltstrip .find .w{color:var(--ink)}
+.boltstrip .find .p{margin-left:auto;font-family:var(--mono);font-size:.85rem;color:var(--ink)}
+.boltstrip .find .was{font-family:var(--mono);font-size:.72rem;color:var(--faint);
+  text-decoration:line-through}
+.boltstrip .why{margin:2px 0 0;font-family:var(--serif);font-size:.82rem;color:var(--dim)}
+/* a kill is the agent refusing to sell him something. Dimmed, struck title,
+   but the REASON stays readable: the reason is the whole value of the row. */
+.boltstrip .killed{margin-top:6px;font-size:.82rem;color:var(--faint)}
+.boltstrip .promo{display:flex;gap:9px;align-items:center;margin-top:7px;font-size:.9rem}
+.boltstrip .promo .store{color:var(--dim)}
+.boltstrip .promo .code{font-family:var(--mono);font-size:.82rem;letter-spacing:.08em;
+  padding:4px 9px;border-radius:8px;border:1px dashed var(--edge);
+  background:transparent;color:var(--accent-ink);cursor:pointer}
+.boltstrip .promo .p{margin-left:auto;font-family:var(--mono);font-size:.85rem;color:var(--ink)}
 
 .aislesec{margin-top:22px}
 .aislesec .cartall{display:block;margin:8px 0 2px;padding:9px 13px;border-radius:11px;
