@@ -329,6 +329,19 @@ assert.match(
   /signals\.items/,
 );
 
+assert.equal(
+  validateCareer({ ...goodCareer, tracker: [{ to: "jane@x.com", org: "S&L", ask: "extend", status: "SENT" }] }),
+  null,
+  "a well-formed tracker row must pass",
+);
+assert.equal(validateCareer({ ...goodCareer, tracker: [] }), null, "an empty tracker is legal");
+assert.match(validateCareer({ ...goodCareer, tracker: "x" }), /tracker must be an array/);
+assert.match(validateCareer({ ...goodCareer, tracker: [{ org: "S&L", ask: "x", status: "x" }] }), /tracker\[0\]\.to/);
+assert.match(
+  validateCareer({ ...goodCareer, tracker: [{ to: "jane", org: 5, ask: "x", status: "x" }] }),
+  /tracker\[0\]\.org/,
+);
+
 // ---------- feedback ----------
 const goodFeedback = {
   date: "2026-08-08",

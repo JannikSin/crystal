@@ -49,6 +49,7 @@ function render(data, note, empty) {
   if (data.spotlight) root.appendChild(spotCard(data.spotlight));
   if (Array.isArray(data.roster) && data.roster.length) root.appendChild(specList(data.roster, data.spotlight));
   if (data.outreach) root.appendChild(outreachSlip(data.outreach));
+  if (Array.isArray(data.tracker)) root.appendChild(trackerBlock(data.tracker));
   if (data.signals) root.appendChild(signalsBlock(data.signals));
 
   // Interview reps: recording lives on the Today board (accessible where the
@@ -200,6 +201,33 @@ function outreachSlip(o) {
   inner.appendChild(act);
   slip.appendChild(inner);
   return slip;
+}
+
+// the outreach tracker: every queued draft and sent-and-waiting row from the
+// vault's System/Outreach-Tracker.md, one place to see everything in flight
+// rather than opening Gmail Drafts and the vault separately (David, 2026-08-17)
+function trackerBlock(rows) {
+  const box = el("section", { class: "tracker" });
+  box.appendChild(el("div", { class: "sh" }, "outreach tracker · queue & waiting"));
+  if (!rows.length) {
+    box.appendChild(el("p", { class: "secnote" }, "Nothing queued or waiting right now."));
+    return box;
+  }
+  rows.forEach((r) => {
+    const row = el("div", { class: "trow" });
+    const top = el("div", { class: "trtop" });
+    top.appendChild(el("span", { class: "trwho" },
+      md([r.to, r.org].filter(Boolean).join(" · "))));
+    if (r.status) top.appendChild(el("span", { class: "badge" + (r.kind ? " " + r.kind : "") }, md(r.status)));
+    row.appendChild(top);
+    if (r.ask) row.appendChild(el("div", { class: "trask" }, md(r.ask)));
+    const foot = el("div", { class: "trfoot" });
+    if (r.due) foot.appendChild(el("span", {}, "due " + md(r.due)));
+    if (r.action) foot.appendChild(el("span", { class: "tract" }, md(r.action)));
+    if (foot.childNodes.length) row.appendChild(foot);
+    box.appendChild(row);
+  });
+  return box;
 }
 
 function signalsBlock(s) {

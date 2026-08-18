@@ -587,6 +587,20 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 .signals{margin-top:26px}
 .signals .item{border-top:1px solid var(--hairline);padding:10px 2px;font-size:.89rem}
 .signals .item p{margin:.35rem 0}
+/* outreach tracker: sits right below the work order, above interview reps
+   (David, 2026-08-17). Same ruled-list vocabulary as .spec, no card fill. */
+.tracker{margin-top:26px}
+.tracker .sh{font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--faint);display:flex;gap:9px;align-items:center;
+  padding-bottom:6px}
+.tracker .sh::after{content:"";flex:1;height:1px;background:var(--edge)}
+.trow{border-top:1px solid var(--hairline);padding:10px 2px}
+.trtop{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.trwho{font-family:var(--serif);font-weight:600;font-size:.98rem;flex:1;min-width:0}
+.trask{font-size:.88rem;color:var(--dim);margin-top:3px}
+.trfoot{display:flex;gap:10px;flex-wrap:wrap;margin-top:5px;font-family:var(--mono);
+  font-size:.62rem;letter-spacing:.06em;color:var(--faint)}
+.trfoot .tract{color:var(--accent-ink)}
 
 /* =========================================================================
    LISTEN: the walkman

@@ -328,7 +328,8 @@ export function validateListen(p) {
 
 // ---------- career ----------
 // {built, spotlight?:{rank, name, facet, text}, roster:[same], cap 40,
-//  outreach?:{name, body, tickId}, signals?:{date, items[]}, aeroDated?}
+//  outreach?:{name, body, tickId}, signals?:{date, items[]}, aeroDated?,
+//  tracker?:[{to, org, ask, from, due, action, status, kind}]}
 function validateCompany(c, at) {
   if (!c || typeof c !== "object") return `${at} must be an object`;
   if (!isNum(c.rank)) return `${at}.rank must be a number`;
@@ -366,6 +367,16 @@ export function validateCareer(p) {
       return "signals.items must be an array of strings";
   }
   if (p.aeroDated !== undefined && !isStr(p.aeroDated)) return "aeroDated must be a string";
+  if (p.tracker !== undefined) {
+    if (!isArr(p.tracker)) return "tracker must be an array";
+    for (let i = 0; i < p.tracker.length; i++) {
+      const t = p.tracker[i];
+      if (!t || typeof t !== "object") return `tracker[${i}] must be an object`;
+      if (!isTxt(t.to)) return `tracker[${i}].to required`;
+      if (!isStr(t.org) || !isStr(t.ask) || !isStr(t.status))
+        return `tracker[${i}].org/ask/status must be strings`;
+    }
+  }
   return null;
 }
 

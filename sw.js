@@ -37,10 +37,9 @@
 // v20: group counter counts direct children, nested groups get a cascading
 //      checkbox (today.js), ticket cards reveal the raising prompt
 //      (desk.js + .ticketnote CSS). Paired changes.
-// v21: the Markets tab is gone (index.html + app.js + markets.js deleted);
-//      its digest sections render at the foot of Money (money.js + the
-//      chip CSS removed). Paired changes.
-const CACHE = "crystal-v21";
+// v22: Career tab gains the outreach tracker (career.js + app.css), sitting
+//      right below the work order and above interview reps (David, 2026-08-17).
+const CACHE = "crystal-v22";
 
 const PRECACHE = [
   "./",
