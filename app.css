@@ -838,6 +838,21 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
    no stated odds reads as a verified one. */
 .boltstrip .promo .odds{font-family:var(--mono);font-size:.7rem;color:var(--faint)}
 .boltstrip .promo .code.stu{border-style:solid;color:var(--ink);cursor:default}
+/* the roster: reference, not news, so it opens on demand. State colour is the
+   whole point of the list, since "following" and "cannot actually watch" are
+   different facts and lumping them would make the list read as complete. */
+.boltstrip .rost{margin-top:12px;padding-top:9px;border-top:1px solid var(--edge)}
+.boltstrip .rost summary{font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--dim);cursor:pointer;list-style:none}
+.boltstrip .rost summary::-webkit-details-marker{display:none}
+.boltstrip .rost summary::before{content:"▸ ";color:var(--faint)}
+.boltstrip .rost[open] summary::before{content:"▾ "}
+.boltstrip .brand{display:flex;gap:9px;align-items:baseline;margin-top:6px;font-size:.9rem}
+.boltstrip .brand .w{color:var(--ink)}
+.boltstrip .brand .st{margin-left:auto;font-family:var(--mono);font-size:.66rem;
+  color:var(--faint);text-align:right}
+.boltstrip .brand.ebay .w{color:var(--dim)}
+.boltstrip .brand.blocked .w{color:var(--faint)}
 
 .aislesec{margin-top:22px}
 .aislesec .cartall{display:block;margin:8px 0 2px;padding:9px 13px;border-radius:11px;

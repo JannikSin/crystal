@@ -45,7 +45,10 @@
 //      land together or the scout block renders unstyled.
 // v24: promo rows gained odds + a per-store heading (shopping.js + .pstore/
 //      .odds/.code.stu CSS). Paired change.
-const CACHE = "crystal-v24";
+// v25: the brand roster and the suggestions queue land in the Shop tab
+//      (shopping.js + .rost/.brand CSS). David asked to see what bolt is
+//      following and where a suggested brand shows up. Paired change.
+const CACHE = "crystal-v25";
 
 const PRECACHE = [
   "./",

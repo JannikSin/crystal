@@ -555,6 +555,27 @@ export function validateBolt(p) {
       if (!isTxt(c.code)) return `promos[${i}].code required`;
     }
   }
+  if (p.roster !== undefined) {
+    if (!isArr(p.roster)) return "roster must be an array";
+    if (p.roster.length > 60) return "roster: more than 60 brands";
+    for (let i = 0; i < p.roster.length; i++) {
+      const b = p.roster[i];
+      if (!b || typeof b !== "object") return `roster[${i}] must be an object`;
+      if (!isTxt(b.name)) return `roster[${i}].name required`;
+      if (b.state !== undefined && !["live", "ebay", "blocked"].includes(b.state))
+        return `roster[${i}].state must be live, ebay or blocked`;
+    }
+  }
+  if (p.suggested !== undefined) {
+    if (!isArr(p.suggested)) return "suggested must be an array";
+    if (p.suggested.length > 12) return "suggested: more than 12 is a firehose";
+    for (let i = 0; i < p.suggested.length; i++) {
+      const s = p.suggested[i];
+      if (!s || typeof s !== "object") return `suggested[${i}] must be an object`;
+      if (!isTxt(s.name)) return `suggested[${i}].name required`;
+      if (s.url !== undefined && !isStr(s.url)) return `suggested[${i}].url must be a string`;
+    }
+  }
   if (p.digest !== undefined) {
     const d = p.digest;
     if (!d || typeof d !== "object") return "digest must be an object";

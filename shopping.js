@@ -246,6 +246,42 @@ function paintBolt(box, d) {
     });
   }
 
+  // ---- D: brands he is suggested to add. Before 2026-08-18 there was nowhere
+  // for a suggestion to land: the scout promoted what cleared the bar and
+  // everything else vanished into the digest's graveyard.
+  const sug = Array.isArray(d.suggested) ? d.suggested : [];
+  if (sug.length) {
+    const sh = el("div", { class: "bsub" });
+    sh.appendChild(el("span", { class: "t" }, "worth adding, your call"));
+    box.appendChild(sh);
+    sug.forEach((s) => {
+      box.appendChild(boltRow("find", [
+        el("span", { class: "w" }, md(String(s.name || ""))),
+        s.verdict ? el("span", { class: "sz" }, String(s.verdict)) : null,
+      ], s.url));
+      if (s.why) box.appendChild(el("div", { class: "why" }, md(String(s.why))));
+    });
+  }
+
+  // ---- E: the roster. Collapsed, because it is reference rather than news:
+  // he asked to SEE what is followed so he can add to it, not to read 21 rows
+  // every time he opens the tab.
+  const roster = Array.isArray(d.roster) ? d.roster : [];
+  if (roster.length) {
+    const live = roster.filter((b) => b.state === "live").length;
+    const det = el("details", { class: "rost" });
+    const sum = el("summary", {},
+      `following ${roster.length} brands, ${live} polled live`);
+    det.appendChild(sum);
+    roster.forEach((b) => {
+      const r = el("div", { class: "brand " + (b.state || "live") });
+      r.appendChild(el("span", { class: "w" }, md(String(b.name))));
+      r.appendChild(el("span", { class: "st" }, String(b.detail || b.state || "")));
+      det.appendChild(r);
+    });
+    box.appendChild(det);
+  }
+
   if (Array.isArray(d.errors) && d.errors.length) {
     box.appendChild(el("div", { class: "err" }, d.errors.length + " source" + (d.errors.length > 1 ? "s" : "") + " erroring: " + md(String(d.errors[0]).slice(0, 80))));
   }

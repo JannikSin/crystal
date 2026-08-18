@@ -804,7 +804,7 @@ export default {
       // it as "checked 3h ago". Only the watcher may set it: if the weekly
       // scout stamped it too, a Sunday digest would make a dead watcher look
       // alive. Each half timestamps its own half.
-      const stamps = ["built", "digestBuilt", "promoBuilt"];
+      const stamps = ["built", "digestBuilt", "promoBuilt", "rosterBuilt"];
       if (!body || typeof body !== "object" || !stamps.some((s) => typeof body[s] === "string"))
         return json(400, { error: `bolt payload needs one of ${stamps.join(", ")} (ISO string)` });
       const bad = validateBolt(body);
