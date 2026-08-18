@@ -213,20 +213,36 @@ function paintBolt(box, d) {
     ph.appendChild(el("span", { class: "t" }, "codes these stores advertise"));
     if (d.promoBuilt) ph.appendChild(el("span", { class: "age" }, String(d.promoBuilt).slice(0, 10)));
     box.appendChild(ph);
+    let lastStore = "";
     promos.forEach((c) => {
+      // One store heading, then its codes. Repeating the store on every row
+      // reads as five stores when it is five codes at one.
+      if (c.store !== lastStore) {
+        box.appendChild(el("div", { class: "pstore" }, md(String(c.store))));
+        lastStore = c.store;
+      }
       const r = el("div", { class: "promo" });
-      r.appendChild(el("span", { class: "store" }, md(String(c.store))));
-      const code = el("button", { class: "code", type: "button" }, String(c.code));
-      // Tap copies. Pasting a code by hand off a phone screen is the whole
-      // friction this replaces.
-      code.onclick = () => {
-        navigator.clipboard?.writeText(String(c.code));
-        code.textContent = "copied";
-        setTimeout(() => { code.textContent = String(c.code); }, 1200);
-      };
+      const isStudent = String(c.code) === "STUDENT";
+      const code = el("button", { class: isStudent ? "code stu" : "code", type: "button" },
+        isStudent ? "student discount" : String(c.code));
+      if (!isStudent) {
+        // Tap copies. Retyping a code off a phone screen is the friction this
+        // whole half exists to remove.
+        code.onclick = () => {
+          navigator.clipboard?.writeText(String(c.code));
+          code.textContent = "copied";
+          setTimeout(() => { code.textContent = String(c.code); }, 1200);
+        };
+      }
       r.appendChild(code);
+      // The odds are not decoration. Without them a guess reads as a fact, and
+      // these are guesses: nothing short of checkout can verify a Shopify code.
+      if (typeof c.odds === "number" && !isStudent) {
+        r.appendChild(el("span", { class: "odds" }, c.odds + "% odds"));
+      }
       if (c.pct) r.appendChild(el("span", { class: "p" }, "-" + c.pct + "%"));
       box.appendChild(r);
+      if (c.why) box.appendChild(el("div", { class: "why" }, md(String(c.why))));
     });
   }
 

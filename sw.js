@@ -43,7 +43,9 @@
 //      shopping.js paintBolt rewritten, new .bsub/.find/.killed/.promo CSS,
 //      and the Worker now MERGES /bolt posts. The CSS and the module must
 //      land together or the scout block renders unstyled.
-const CACHE = "crystal-v23";
+// v24: promo rows gained odds + a per-store heading (shopping.js + .pstore/
+//      .odds/.code.stu CSS). Paired change.
+const CACHE = "crystal-v24";
 
 const PRECACHE = [
   "./",

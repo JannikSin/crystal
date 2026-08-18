@@ -832,6 +832,12 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
   padding:4px 9px;border-radius:8px;border:1px dashed var(--edge);
   background:transparent;color:var(--accent-ink);cursor:pointer}
 .boltstrip .promo .p{margin-left:auto;font-family:var(--mono);font-size:.85rem;color:var(--ink)}
+.boltstrip .pstore{margin-top:9px;font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim)}
+/* odds ride next to every code on purpose: these are guesses, and a code with
+   no stated odds reads as a verified one. */
+.boltstrip .promo .odds{font-family:var(--mono);font-size:.7rem;color:var(--faint)}
+.boltstrip .promo .code.stu{border-style:solid;color:var(--ink);cursor:default}
 
 .aislesec{margin-top:22px}
 .aislesec .cartall{display:block;margin:8px 0 2px;padding:9px 13px;border-radius:11px;
