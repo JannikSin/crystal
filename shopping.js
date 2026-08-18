@@ -123,8 +123,10 @@ function render(data, note, empty) {
 //   B  the SCOUT, weekly, exploratory. Named picks with prices and sizes, and
 //      the items it deliberately killed, which is the half that shows the
 //      agent exercising judgement rather than forwarding sales.
-//   C  the PROMO hunter. Codes validated against the store's own cart, so a
-//      code shown here actually moved a total, it is not a coupon-site guess.
+//   C  the PROMO hunter. Codes the store is advertising on its own pages,
+//      first-hand and not stale. NOT verified: Shopify only resolves a code at
+//      checkout, so nothing short of checkout can confirm one, and the label
+//      says "advertise" rather than "work" for exactly that reason.
 //
 // Every row that has a product URL is a link. The old strip printed titles you
 // could not tap, which made it a status light rather than a shopping tool.
@@ -208,7 +210,7 @@ function paintBolt(box, d) {
   const promos = Array.isArray(d.promos) ? d.promos : [];
   if (promos.length) {
     const ph = el("div", { class: "bsub" });
-    ph.appendChild(el("span", { class: "t" }, "codes that actually work"));
+    ph.appendChild(el("span", { class: "t" }, "codes these stores advertise"));
     if (d.promoBuilt) ph.appendChild(el("span", { class: "age" }, String(d.promoBuilt).slice(0, 10)));
     box.appendChild(ph);
     promos.forEach((c) => {
