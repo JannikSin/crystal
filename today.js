@@ -121,9 +121,17 @@ function render(offlineNote, emptyDayNote) {
     b.appendChild(back);
     root.appendChild(b);
   } else if (stale) {
+    // "Open with signal to refresh" was not true and cost him a morning:
+    // refreshing cannot conjure a brief that was never built. The brief is
+    // generated ON THE LAPTOP (CrystalMorning, 06:30 daily plus a catch-up at
+    // logon) and pushed here. A laptop that was OFF, not merely asleep, at
+    // 06:30 builds nothing, and the Worker keeps serving the last day it has.
+    // David, 2026-08-17: "why is this not updating for today, I'm on the
+    // Sunday copy when it's Monday, it's Monday at 11 AM." Say the real cause,
+    // so the next move is opening the laptop rather than pulling to refresh.
     root.appendChild(el("div", { class: "banner" },
-      "This brief is from " + md(brief.day) + ", not today. Anything you tick counts for today. " +
-      "Open with signal to refresh."));
+      "This brief is from " + md(brief.day) + ", not today. Anything you tick still counts for today. " +
+      "Today's has not been built yet: that happens on the laptop at 06:30, or whenever it next wakes."));
   }
 
   if (!brief) {
@@ -651,7 +659,10 @@ let wantWake = false;
 let sentinel = null;
 let wakeState = "off"; // off | on | na
 
-function wakeButton() {
+// Exported 2026-08-22 so the Listen tab can carry the same toggle: he listens
+// on the gym floor with the phone down, which is the other place a dark screen
+// costs him something. One implementation, one sentinel, two screens.
+export function wakeButton() {
   const b = el("button", { type: "button", class: "wake", "data-state": wakeState, "aria-label": "Keep the screen awake" }, "🌙");
   b.title = "Keep the screen awake";
   b.addEventListener("click", async () => {
@@ -698,9 +709,19 @@ async function acquireWake(retried) {
 
 // RL15: the screen going dark is the commonest way a recording dies. Held for
 // the length of the take, and only released if the recorder is what took it.
+//
+// EXPORTED 2026-08-22. This was written for the interview recorder on this
+// screen and the DESK BUBBLE never got it, which is the recorder David
+// actually uses, on every tab. He reported the symptom twice as "a timeout
+// thing, it goes for like 30 seconds and it stops", and then named the cause
+// himself: "add the whole Netflix like thing so that the screen won't go dark.
+// You've implemented that for me before, so just do the same thing." He was
+// right. The phone's auto-lock suspends the page and MediaRecorder dies with
+// it; nothing in our code was stopping at 30 seconds, the SCREEN was. Same
+// lock, same guards, now held for the bubble too (app.js).
 let recHeldWake = false;
 
-async function holdWakeForRec() {
+export async function holdWakeForRec() {
   if (sentinel) return; // the toggle already holds one, leave it alone
   wantWake = true;
   await acquireWake();
@@ -708,7 +729,7 @@ async function holdWakeForRec() {
   paintWake();
 }
 
-async function dropWakeForRec() {
+export async function dropWakeForRec() {
   if (!recHeldWake) return;
   recHeldWake = false;
   wantWake = false;

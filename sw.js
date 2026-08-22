@@ -48,7 +48,7 @@
 // v25: the brand roster and the suggestions queue land in the Shop tab
 //      (shopping.js + .rost/.brand CSS). David asked to see what bolt is
 //      following and where a suggested brand shows up. Paired change.
-const CACHE = "crystal-v25";
+const CACHE = "crystal-v26";
 
 const PRECACHE = [
   "./",

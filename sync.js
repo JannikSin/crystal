@@ -225,7 +225,10 @@ export function flushUploads() {
       const path = rec.kind === "scan"
         ? "/scan?date=" + encodeURIComponent(rec.date)
         : rec.kind === "deskaudio"
-          ? "/deskaudio"
+          // secs is what the PHONE clocked. The drain compares it against the
+          // duration the transcriber measured, so "it cut out" stops being a
+          // feeling and becomes two numbers that either agree or do not.
+          ? "/deskaudio" + (rec.secs ? "?secs=" + encodeURIComponent(rec.secs) : "")
           : "/answer?date=" + encodeURIComponent(rec.date) + "&qid=" + encodeURIComponent(rec.qid || "");
       let r;
       try {

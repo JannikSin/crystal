@@ -10,6 +10,7 @@ import {
   root, el, md, lsGet, lsSet, todayIso, appFooter, emptyState, loadCached, isTab,
 } from "./core.js";
 import { localTicks, tickControl, queueCapture } from "./sync.js";
+import { wakeButton } from "./today.js";
 
 const SECTION = "🎧 Listen";
 const TAG_EMOJI = {
@@ -38,7 +39,12 @@ function render(data, note, empty) {
   root.innerHTML = "";
   const head = el("header", {});
   head.appendChild(el("div", { class: "eyebrow" }, "🔮 crystal · listen"));
-  head.appendChild(el("h1", {}, "The Walkman"));
+  const h1 = el("h1", {}, "The Walkman");
+  // The screen-awake toggle, same sentinel as the Today screen. David,
+  // 2026-08-22: "add the whole Netflix like thing so that the screen won't go
+  // dark." This is the screen he has open with the phone face-up on a bench.
+  h1.appendChild(wakeButton());
+  head.appendChild(h1);
   root.appendChild(head);
 
   if (note) root.appendChild(el("div", { class: "banner" }, note));

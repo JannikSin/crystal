@@ -74,11 +74,26 @@ bta.addEventListener("input", () => {
 const brow = el("div", { class: "row" });
 const bstat = el("span", { class: "stat" }, "");
 const bsend = el("button", { type: "button", class: "send" }, "Send");
+// Send is for TYPED text only, and it never said so. David, 2026-08-18: "when
+// I click stop does that automatically send it, or do I have to click send
+// after? So far I've been clicking send after."
+//
+// It does send itself, and always has: brec.onstop enqueues the upload on its
+// own pipe. What he was pressing afterwards was a button that found an empty
+// textarea and returned in silence, which is indistinguishable from a button
+// that failed. So: stopping says SENT in as many words, and Send answers when
+// there is nothing to send instead of doing nothing.
 bsend.addEventListener("click", () => {
   const text = bta.value.trim();
-  if (!text) return;
+  if (!text) {
+    bstat.textContent = brec ? "the recording already sent itself when you pressed stop"
+      : "nothing typed yet";
+    setTimeout(() => { bstat.textContent = ""; }, 2600);
+    return;
+  }
   queueDesk(text);
   bta.value = "";
+  bta.style.height = "auto";
   bstat.textContent = "captured, files within the hour";
   setTimeout(() => { bstat.textContent = ""; panel.hidden = true; }, 1600);
 });
@@ -89,34 +104,90 @@ bsend.addEventListener("click", () => {
 const bmic = el("button", { type: "button", class: "mic", "aria-label": "Record for the Desk" }, "🎙");
 let brec = null;
 let bchunks = [];
-const BUBBLE_MAX_MS = 180000;
+let bstart = 0;
+let btick = null;
+let bcap = null;
+// 5 minutes, raised from 3 on 2026-08-22 now that the screen no longer dies
+// mid-note. The real ceiling is the Worker's 6 MB /deskaudio cap, and the
+// bitrate below is what keeps a five-minute note comfortably inside it:
+// 64 kbps mono is more than speech recognition needs, and 5 min of it is
+// about 2.4 MB, which also matters on a cell connection in a gym.
+const BUBBLE_MAX_MS = 300000;
+const BUBBLE_BPS = 64000;
+const mmss = (ms) => {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+};
 bmic.addEventListener("click", async () => {
   if (brec && brec.state === "recording") { brec.stop(); return; }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const mime = window.MediaRecorder && MediaRecorder.isTypeSupported("audio/mp4")
       ? "audio/mp4" : "audio/webm";
-    brec = new MediaRecorder(stream, { mimeType: mime });
+    brec = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: BUBBLE_BPS });
     bchunks = [];
     brec.ondataavailable = (e) => { if (e.data && e.data.size) bchunks.push(e.data); };
     brec.onstop = async () => {
+      const secs = Math.round((Date.now() - bstart) / 1000);
+      if (btick) { clearInterval(btick); btick = null; }
+      if (bcap) { clearTimeout(bcap); bcap = null; }
+      void today.dropWakeForRec();
       stream.getTracks().forEach((t) => t.stop());
       bmic.classList.remove("on");
       bmic.textContent = "🎙";
       const blob = new Blob(bchunks, { type: (bchunks[0] && bchunks[0].type) || mime });
       try {
-        await uploadEnqueue({ kind: "deskaudio", date: new Date().toISOString().slice(0, 10), blob });
-        bstat.textContent = "recorded, transcribes and files within the hour";
+        // secs rides along so the drain can compare what the PHONE recorded
+        // against what the transcriber heard. "It seems to cut out at some
+        // points" is unfalsifiable until those two numbers sit side by side.
+        await uploadEnqueue({
+          kind: "deskaudio", date: new Date().toISOString().slice(0, 10), secs, blob,
+        });
+        bstat.textContent = `sent, ${mmss(secs * 1000)}. Transcribes and files within the hour, no need to press Send.`;
       } catch (e) {
         bstat.textContent = "this phone would not store the recording";
       }
-      setTimeout(() => { bstat.textContent = ""; }, 2500);
+      setTimeout(() => { bstat.textContent = ""; }, 4000);
     };
-    brec.start(5000);
-    setTimeout(() => { if (brec && brec.state === "recording") brec.stop(); }, BUBBLE_MAX_MS);
+    // NO TIMESLICE, deliberately, changed 2026-08-22.
+    //
+    // It used to be brec.start(5000). On iOS Safari a timesliced audio/mp4
+    // recording hands back FRAGMENTS: only the first blob carries the moov
+    // header, and the concatenation of the rest is a file most decoders read
+    // partway and then abandon. That is a precise match for the two things
+    // David reported, "the transcription seems to cut out at some points" and
+    // a note that stops early, and it sits UPSTREAM of the whisper decode
+    // settings that were already hardened on 2026-08-17, which is why that fix
+    // did not close it. With no timeslice, ondataavailable fires once at stop
+    // with one well formed file. Nothing is lost by the change: the chunks
+    // only ever lived in memory either way, so a killed tab took them both.
+    // THE 30 SECONDS. Nothing in this file ever stopped at 30 seconds; the
+    // PHONE did. Auto-lock darkens the screen, iOS suspends the page, and
+    // MediaRecorder dies with it, which he experienced as "a timeout thing,
+    // it goes for like 30 seconds and it stops". The interview recorder on the
+    // Today screen has held a screen wake lock for exactly this reason since
+    // RL15; the bubble, which is the recorder he actually uses, never did.
+    // Same lock, taken before the first byte and dropped at stop.
+    void today.holdWakeForRec();
+    bstart = Date.now();
+    brec.start();
+    // the elapsed clock is not decoration. It is the instrument that settles
+    // "it goes for like 30 seconds and it stops": next time there is a number
+    // on the button, and it is the same number the drain gets sent.
+    bmic.textContent = "⏹ 0:00";
+    btick = setInterval(() => {
+      if (brec && brec.state === "recording") bmic.textContent = "⏹ " + mmss(Date.now() - bstart);
+    }, 500);
+    bcap = setTimeout(() => {
+      if (brec && brec.state === "recording") {
+        bstat.textContent = "5 minutes is the cap, stopping and sending";
+        brec.stop();
+      }
+    }, BUBBLE_MAX_MS);
     bmic.classList.add("on");
-    bmic.textContent = "⏹";
   } catch (e) {
+    // if the wake lock was taken before the throw, give it back
+    void today.dropWakeForRec();
     bstat.textContent = "mic unavailable; type it instead";
     setTimeout(() => { bstat.textContent = ""; }, 2500);
   }
@@ -126,6 +197,10 @@ brow.appendChild(bstat);
 brow.appendChild(bsend);
 panel.appendChild(bta);
 panel.appendChild(brow);
+// One line, said once, so the question never has to be asked again.
+panel.appendChild(el("p", { class: "bhint" },
+  "Speak: press 🎙, press ⏹, and it is sent. Send is only for typed text. "
+  + "The screen is held awake while you record, up to 5 minutes."));
 bubble.addEventListener("click", () => {
   panel.hidden = !panel.hidden;
   if (!panel.hidden) bta.focus();

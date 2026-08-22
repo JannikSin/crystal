@@ -795,6 +795,37 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
 .boltstrip:empty{display:none}
 .boltstrip{margin-top:14px;padding:10px 13px;background:var(--card);
   border:1px solid var(--edge);border-radius:13px}
+/* 2026-08-22: the strip collapses. David: "if I click a bolt at the top the
+   rest needs to be able to disappear... it just crowds up this tab too much."
+   The summary keeps the counts so a quiet week and a three-find week do not
+   look the same when shut. */
+.boltstrip .boltwrap>summary{list-style:none;cursor:pointer}
+.boltstrip .boltwrap>summary::-webkit-details-marker{display:none}
+.boltstrip .boltwrap>summary::after{content:"▸";margin-left:8px;color:var(--faint);
+  font-size:.7rem;transition:transform .15s ease;display:inline-block}
+.boltstrip .boltwrap[open]>summary::after{transform:rotate(90deg)}
+.boltstrip .bbody{padding-top:4px}
+.boltstrip .watched{margin-top:6px;font-family:var(--mono);font-size:.62rem;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+/* a bolt row opens IN PLACE. It used to be an <a> that threw him into a
+   browser, or, with no url in the payload, a <div> that swallowed the tap
+   entirely. That second case is the one he reported (the Stratotech hoodie). */
+.boltstrip .brow{border-bottom:1px solid var(--edge)}
+.boltstrip .brow:last-of-type{border-bottom:0}
+.boltstrip .bhd{display:flex;gap:8px;align-items:baseline;width:100%;
+  padding:9px 0;background:none;border:0;text-align:left;cursor:pointer;
+  color:inherit;font:inherit;font-size:.92rem}
+.boltstrip .bhd .car{margin-left:6px;color:var(--faint);transition:transform .15s ease}
+.boltstrip .brow.open .bhd .car{transform:rotate(90deg)}
+.boltstrip .bmore{padding:2px 0 11px}
+.boltstrip .bkv{display:flex;gap:10px;align-items:baseline;padding:3px 0}
+.boltstrip .bkv .k{flex:0 0 5.5em;font-family:var(--mono);font-size:.62rem;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.boltstrip .bkv .v{font-size:.88rem;color:var(--ink)}
+.boltstrip .bmore .go{display:inline-block;margin-top:8px;padding:7px 12px;
+  border-radius:9px;border:1px solid var(--edge);background:var(--card);
+  text-decoration:none;font-family:var(--mono);font-size:.74rem;
+  letter-spacing:.06em;color:var(--accent-ink)}
 .boltstrip .bh{display:flex;align-items:baseline;gap:9px;font-family:var(--mono);
   font-size:.62rem;letter-spacing:.14em;text-transform:uppercase}
 .boltstrip .bh .t{color:var(--ink);font-weight:600}
@@ -855,9 +886,13 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
 .boltstrip .brand.blocked .w{color:var(--faint)}
 
 .aislesec{margin-top:22px}
-.aislesec .cartall{display:block;margin:8px 0 2px;padding:9px 13px;border-radius:11px;
+/* now a BUTTON, not a link: Amazon's multi-add URL turned into an affiliate
+   endpoint, so this walks the section one product at a time (shopping.js) */
+.aislesec .cartall{display:block;width:100%;text-align:left;margin:8px 0 2px;
+  padding:11px 13px;border-radius:11px;cursor:pointer;
   background:var(--card);border:1px solid var(--edge);text-decoration:none;
   font-family:var(--mono);font-size:.78rem;letter-spacing:.06em;color:var(--accent-ink)}
+.aislesec .cartall:active{background:var(--edge)}
 .aislesec .sh{display:flex;align-items:center;gap:9px;font-family:var(--mono);
   font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);
   padding-bottom:6px;border-bottom:1px solid var(--edge)}
@@ -930,6 +965,10 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
 .bubblepanel textarea{width:100%;min-height:84px;max-height:45vh;overflow-y:auto;
   -webkit-overflow-scrolling:touch;border:1px solid var(--edge);border-radius:10px;
   font-size:16px;color:var(--ink);background:var(--bg);padding:8px;resize:vertical}
+/* Said once, so the question never has to be asked again: stopping the mic IS
+   sending. He had been pressing Send afterwards, onto an empty textarea, which
+   returned in silence and so looked exactly like a failure. */
+.bubblepanel .bhint{margin:8px 2px 0;font-size:.74rem;line-height:1.45;color:var(--faint)}
 .deskhead{margin:26px 0 4px;font-size:1.05rem}
 /* tap a ticket title, see the prompt that raised it */
 .capture h2.hasnote{cursor:pointer}

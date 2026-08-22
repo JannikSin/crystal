@@ -140,85 +140,173 @@ function safeUrl(u) {
   return /^https?:\/\//i.test(u.trim()) ? u.trim() : null;
 }
 
-function boltRow(cls, bits, rawUrl) {
-  const url = safeUrl(rawUrl);
-  const r = el(url ? "a" : "div", url
-    ? { class: cls, href: url, target: "_blank", rel: "noopener" }
-    : { class: cls });
-  bits.filter(Boolean).forEach((b) => r.appendChild(b));
+// A bolt row is a DISCLOSURE, not a link. David, 2026-08-18: "I'm seeing Bolt
+// has the Stratotech Hoodie Black Heather... but when I click on it, nothing
+// pops up. I want there to be something that pops up."
+//
+// He was right twice over. A row whose payload carried no url rendered as a
+// plain div and swallowed the tap entirely, and a row that DID carry one threw
+// him out of the app into a browser, which is not "something pops up" either.
+// So every row now opens in place, the way the aisle rows already did: the
+// facts the agent actually gathered, then the link as a deliberate second tap.
+function kv(label, value) {
+  const r = el("div", { class: "bkv" });
+  r.appendChild(el("span", { class: "k" }, label));
+  r.appendChild(el("span", { class: "v" }, md(String(value))));
   return r;
 }
+
+/**
+ * @param cls      row class, "hit" or "find"
+ * @param bits     the collapsed line's spans
+ * @param rawUrl   product url, may be missing
+ * @param facts    [label, value] pairs for the open state
+ * @param why      the agent's reasoning, the thing worth reading
+ */
+function boltRow(cls, bits, rawUrl, facts, why) {
+  const url = safeUrl(rawUrl);
+  const wrap = el("div", { class: "brow" });
+  const hd = el("button", { type: "button", class: cls + " bhd", "aria-expanded": "false" });
+  bits.filter(Boolean).forEach((b) => hd.appendChild(b));
+  hd.appendChild(el("span", { class: "car" }, "›"));
+
+  const more = el("div", { class: "bmore" });
+  more.hidden = true;
+  (facts || []).filter((f) => f && f[1] !== null && f[1] !== undefined && f[1] !== "")
+    .forEach((f) => more.appendChild(kv(f[0], f[1])));
+  if (why) more.appendChild(el("p", { class: "why" }, md(String(why))));
+  if (url) {
+    more.appendChild(el("a", { class: "go", href: url, target: "_blank", rel: "noopener" }, "open the product page ↗"));
+  } else {
+    // Saying so beats a dead-feeling row. This IS the Stratotech case.
+    more.appendChild(el("p", { class: "why" }, "The watcher did not record a link for this one, so there is nothing to open. The title above is what it saw."));
+  }
+
+  let open = false;
+  hd.addEventListener("click", () => {
+    open = !open;
+    more.hidden = !open;
+    hd.setAttribute("aria-expanded", open ? "true" : "false");
+    wrap.classList.toggle("open", open);
+  });
+  wrap.appendChild(hd);
+  wrap.appendChild(more);
+  return wrap;
+}
+
+// Collapsed by default. David, 2026-08-19: "if I click a bolt at the top the
+// rest needs to be able to disappear, like just be a subcategory... it just
+// crowds up this tab too much." The summary keeps the counts, so nothing is
+// hidden silently: a quiet week and a week with three finds do not look the
+// same from the outside. The last state he chose is remembered.
+const BOLT_OPEN = "crystal.boltopen";
 
 function paintBolt(box, d) {
   // Any one half is enough to draw the card. Gating on `built` alone meant a
   // scout digest could not show until the watcher had also reported.
   if (!box.isConnected || !d || !(d.built || d.digestBuilt || d.promoBuilt)) return;
   box.innerHTML = "";
-  const head = el("div", { class: "bh" });
+
+  const week = Array.isArray(d.week) ? d.week : [];
+  const dg = d.digest || {};
+  const finds = Array.isArray(dg.finds) ? dg.finds : [];
+  const promos = Array.isArray(d.promos) ? d.promos : [];
+  const sug = Array.isArray(d.suggested) ? d.suggested : [];
+
+  const wrap = el("details", { class: "boltwrap" });
+  if (lsGet(BOLT_OPEN, false) === true) wrap.open = true;
+  wrap.addEventListener("toggle", () => lsSet(BOLT_OPEN, wrap.open));
+
+  const head = el("summary", { class: "bh" });
   head.appendChild(el("span", { class: "t" }, "⚡ bolt"));
   const age = d.built ? Date.now() - Date.parse(d.built) : NaN;
   const h = Math.floor(age / 3600000);
   head.appendChild(el("span", { class: "age" },
     Number.isNaN(age) ? "watcher has not reported" : age < 0 ? ""
       : h < 1 ? "checked just now" : h < 48 ? `checked ${h}h ago` : "STALE, check the repo"));
-  head.appendChild(el("span", { class: "n" }, (d.tracked || 0) + " watched"));
-  box.appendChild(head);
+  // What is inside, counted, so the collapsed strip is still informative.
+  const bits = [];
+  if (week.length) bits.push(week.length + (week.length === 1 ? " hit" : " hits"));
+  if (finds.length) bits.push(finds.length + (finds.length === 1 ? " find" : " finds"));
+  if (promos.length) bits.push(promos.length + " code" + (promos.length === 1 ? "" : "s"));
+  if (sug.length) bits.push(sug.length + " to add");
+  head.appendChild(el("span", { class: "n" }, bits.length ? bits.join(" · ") : "quiet"));
+  wrap.appendChild(head);
+
+  const body = el("div", { class: "bbody" });
+  wrap.appendChild(body);
+  box.appendChild(wrap);
+
+  body.appendChild(el("div", { class: "watched" }, (d.tracked || 0) + " brands watched"));
 
   // ---- A: the watcher's week
-  const week = Array.isArray(d.week) ? d.week : [];
   if (!week.length) {
-    box.appendChild(el("div", { class: "quiet" }, "Quiet week from the watcher. Nothing cleared the bar, which is the plan working."));
+    body.appendChild(el("div", { class: "quiet" }, "Quiet week from the watcher. Nothing cleared the bar, which is the plan working."));
   } else {
     week.slice(-6).reverse().forEach((w) => {
-      box.appendChild(boltRow("hit", [
+      body.appendChild(boltRow("hit", [
         el("span", { class: "d" }, String(w.date || "").slice(5)),
         el("span", { class: "w" }, md(String(w.title || w.key || ""))),
         w.size ? el("span", { class: "sz" }, String(w.size)) : null,
         w.price ? el("span", { class: "p" }, "$" + w.price) : null,
-      ], w.url));
+      ], w.url, [
+        ["found", w.date || ""],
+        // the watcher's key is "Brand:product-slug"; the slug is already the
+        // title on the row above, so only the brand half belongs here
+        ["brand", w.brand || w.store || String(w.key || "").split(":")[0] || ""],
+        ["size", w.size || ""],
+        ["price", w.price ? "$" + w.price : ""],
+        ["was", w.was ? "$" + w.was : ""],
+      ], w.why || w.note));
     });
   }
 
   // ---- B: the scout's week
-  const dg = d.digest || {};
-  const finds = Array.isArray(dg.finds) ? dg.finds : [];
   if (dg.headline || finds.length) {
     const sh = el("div", { class: "bsub" });
     sh.appendChild(el("span", { class: "t" }, "scout"));
     if (d.digestBuilt) sh.appendChild(el("span", { class: "age" }, String(d.digestBuilt).slice(0, 10)));
-    box.appendChild(sh);
-    if (dg.headline) box.appendChild(el("p", { class: "bnote" }, md(String(dg.headline))));
+    body.appendChild(sh);
+    if (dg.headline) body.appendChild(el("p", { class: "bnote" }, md(String(dg.headline))));
     finds.forEach((f) => {
-      box.appendChild(boltRow("find", [
+      const off = (typeof f.price === "number" && typeof f.was === "number" && f.was > 0)
+        ? Math.round((1 - f.price / f.was) * 100) + "% off" : "";
+      body.appendChild(boltRow("find", [
         el("span", { class: "w" }, md(String(f.title || ""))),
         f.size ? el("span", { class: "sz" }, String(f.size)) : null,
         typeof f.price === "number" ? el("span", { class: "p" }, "$" + f.price.toFixed(2)) : null,
         typeof f.was === "number" ? el("span", { class: "was" }, "$" + f.was.toFixed(0)) : null,
-      ], f.url));
-      if (f.why) box.appendChild(el("div", { class: "why" }, md(String(f.why))));
+      ], f.url, [
+        ["brand", f.brand || f.store || ""],
+        ["size", f.size || ""],
+        ["price", typeof f.price === "number" ? "$" + f.price.toFixed(2) : ""],
+        ["list", typeof f.was === "number" ? "$" + f.was.toFixed(2) : ""],
+        ["discount", off],
+        ["fabric", f.fabric || f.material || ""],
+        ["returns", f.returns || ""],
+      ], f.why));
     });
     // The kills are the point, not filler: they are the agent refusing to sell
     // him something, with the rule it applied.
     (Array.isArray(dg.killed) ? dg.killed : []).forEach((k) => {
-      box.appendChild(el("div", { class: "killed" },
+      body.appendChild(el("div", { class: "killed" },
         md(String(k.title || "")) + (k.why ? " — " + md(String(k.why)) : "")));
     });
-    if (dg.uncovered) box.appendChild(el("div", { class: "err" }, md(String(dg.uncovered))));
+    if (dg.uncovered) body.appendChild(el("div", { class: "err" }, md(String(dg.uncovered))));
   }
 
   // ---- C: promo codes
-  const promos = Array.isArray(d.promos) ? d.promos : [];
   if (promos.length) {
     const ph = el("div", { class: "bsub" });
     ph.appendChild(el("span", { class: "t" }, "codes these stores advertise"));
     if (d.promoBuilt) ph.appendChild(el("span", { class: "age" }, String(d.promoBuilt).slice(0, 10)));
-    box.appendChild(ph);
+    body.appendChild(ph);
     let lastStore = "";
     promos.forEach((c) => {
       // One store heading, then its codes. Repeating the store on every row
       // reads as five stores when it is five codes at one.
       if (c.store !== lastStore) {
-        box.appendChild(el("div", { class: "pstore" }, md(String(c.store))));
+        body.appendChild(el("div", { class: "pstore" }, md(String(c.store))));
         lastStore = c.store;
       }
       const r = el("div", { class: "promo" });
@@ -241,25 +329,26 @@ function paintBolt(box, d) {
         r.appendChild(el("span", { class: "odds" }, c.odds + "% odds"));
       }
       if (c.pct) r.appendChild(el("span", { class: "p" }, "-" + c.pct + "%"));
-      box.appendChild(r);
-      if (c.why) box.appendChild(el("div", { class: "why" }, md(String(c.why))));
+      body.appendChild(r);
+      if (c.why) body.appendChild(el("div", { class: "why" }, md(String(c.why))));
     });
   }
 
   // ---- D: brands he is suggested to add. Before 2026-08-18 there was nowhere
   // for a suggestion to land: the scout promoted what cleared the bar and
   // everything else vanished into the digest's graveyard.
-  const sug = Array.isArray(d.suggested) ? d.suggested : [];
   if (sug.length) {
     const sh = el("div", { class: "bsub" });
     sh.appendChild(el("span", { class: "t" }, "worth adding, your call"));
-    box.appendChild(sh);
+    body.appendChild(sh);
     sug.forEach((s) => {
-      box.appendChild(boltRow("find", [
+      body.appendChild(boltRow("find", [
         el("span", { class: "w" }, md(String(s.name || ""))),
         s.verdict ? el("span", { class: "sz" }, String(s.verdict)) : null,
-      ], s.url));
-      if (s.why) box.appendChild(el("div", { class: "why" }, md(String(s.why))));
+      ], s.url, [
+        ["verdict", s.verdict || ""],
+        ["brand", s.name || ""],
+      ], s.why));
     });
   }
 
@@ -279,11 +368,11 @@ function paintBolt(box, d) {
       r.appendChild(el("span", { class: "st" }, String(b.detail || b.state || "")));
       det.appendChild(r);
     });
-    box.appendChild(det);
+    body.appendChild(det);
   }
 
   if (Array.isArray(d.errors) && d.errors.length) {
-    box.appendChild(el("div", { class: "err" }, d.errors.length + " source" + (d.errors.length > 1 ? "s" : "") + " erroring: " + md(String(d.errors[0]).slice(0, 80))));
+    body.appendChild(el("div", { class: "err" }, d.errors.length + " source" + (d.errors.length > 1 ? "s" : "") + " erroring: " + md(String(d.errors[0]).slice(0, 80))));
   }
 }
 
@@ -295,21 +384,48 @@ function sectionBlock(s, rows) {
   h.appendChild(el("span", { class: "chip" }, meta.chip));
   box.appendChild(h);
   if (s.note) box.appendChild(el("p", { class: "secnote" }, md(s.note)));
-  // One tap fills an Amazon cart with the whole section (the classic
-  // aws/cart/add multi-ASIN URL). Only on actionable sections, and only from
-  // items whose url is a real /dp/ product page; search-fallback urls and
-  // non-Amazon links can't ride along. Ticked-off items still get added: the
-  // tick means "in the basket", and this IS the basket.
+  // FILLING THE CART, second attempt.
+  //
+  // The first version built the classic multi-ASIN link,
+  // https://www.amazon.com/gp/aws/cart/add.html?ASIN.1=...&Quantity.1=1
+  // and David reported it plainly: "the link to add all 10 to the Amazon cart
+  // just doesn't work. Like literally just doesn't work... I'm logged into my
+  // Amazon account, so it should work."
+  //
+  // Checked against the live site 2026-08-22 and he is right, for a reason no
+  // amount of staring at our own code would have found. That URL now 302s to
+  // /associates/addtocart and then to an OpenID sign-in carrying
+  // assoc_handle=amzn_associates_add_to_cart_us. It is an AFFILIATE endpoint
+  // now, not a shopper one: being signed in to Amazon is not enough, it wants
+  // an Associates account. There is no query-string URL left that a logged-in
+  // shopper can follow to fill a cart with several items.
+  //
+  // So the control stops pretending. It walks the section one product at a
+  // time, which is the number of taps Amazon actually charges, and it says so.
+  // The position is held in a closure, not in storage: a shopping section is a
+  // few minutes of one person's life, not state worth persisting.
   if (s.status === "buy" || s.status === "queued") {
-    const asins = (s.items || [])
-      .map((it) => (/amazon\.com\/dp\/([A-Z0-9]{10})/.exec(it.url || "") || [])[1])
-      .filter(Boolean);
-    if (asins.length >= 2) {
-      const q = asins.map((a, i) => `ASIN.${i + 1}=${a}&Quantity.${i + 1}=1`).join("&");
-      box.appendChild(el("a", {
-        class: "cartall", target: "_blank", rel: "noopener",
-        href: "https://www.amazon.com/gp/aws/cart/add.html?" + q,
-      }, `add all ${asins.length} to Amazon cart ↗`));
+    const buys = (s.items || []).filter((it) => /amazon\.com\/dp\/[A-Z0-9]{10}/.test(it.url || ""));
+    if (buys.length >= 2) {
+      let at = 0;
+      const btn = el("button", { type: "button", class: "cartall" }, "");
+      const paint = () => {
+        btn.textContent = at === 0
+          ? `open all ${buys.length} on Amazon, one at a time ↗`
+          : at < buys.length
+            ? `next: ${buys[at].name} · ${at + 1} of ${buys.length} ↗`
+            : `all ${buys.length} opened · start over`;
+      };
+      btn.addEventListener("click", () => {
+        if (at >= buys.length) { at = 0; paint(); return; }
+        window.open(buys[at].url, "_blank", "noopener");
+        at += 1;
+        paint();
+      });
+      paint();
+      box.appendChild(btn);
+      box.appendChild(el("p", { class: "secnote" },
+        "Amazon retired the add-several-at-once link; it now demands an affiliate account rather than yours. One tap per product is what is left."));
     }
   }
   (s.items || []).forEach((it) => box.appendChild(itemRow(it, s.status, rows)));

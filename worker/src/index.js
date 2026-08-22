@@ -909,6 +909,12 @@ export default {
         const mRoute = clip(url.searchParams.get("route"), 80);
         if (mApp) meta.app = mApp;
         if (mRoute) meta.route = mRoute;
+        // What the PHONE clocked, in seconds. The drain sets it beside the
+        // duration the transcriber measured; a large gap is a truncated
+        // upload, which is the shape of the "it cuts out" reports. Bounded so
+        // a hand-crafted query cannot write junk into the meta record.
+        const mSecs = Math.round(Number(url.searchParams.get("secs")) || 0);
+        if (Number.isFinite(mSecs) && mSecs > 0 && mSecs < 36000) meta.secs = mSecs;
         await env.STORE.put(`deskaudio:${id}`, buf, { expirationTtl: BLOB_TTL });
         await env.STORE.put(`deskaudiometa:${id}`, JSON.stringify(meta), { expirationTtl: BLOB_TTL });
         return json(200, { ok: true, id, bytes: buf.byteLength });
