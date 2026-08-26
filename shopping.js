@@ -25,6 +25,7 @@ const GOT_KEY = "crystal.cart";
 // Worker's validateShopping, so an unknown value cannot reach here.
 const STATUS = {
   buy: { chip: "buy now", cls: "s-buy" },
+  bring: { chip: "from home", cls: "s-bring" },
   queued: { chip: "queued", cls: "s-queued" },
   held: { chip: "held", cls: "s-held" },
   blocked: { chip: "blocked", cls: "s-blocked" },

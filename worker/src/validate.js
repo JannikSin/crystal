@@ -475,7 +475,12 @@ export function validateMoves(p) {
 //   desc?, url?, spec?}]}], totals?:{label, amount}[]}
 // status is a closed set because shopping.js colours and orders on it; an
 // unknown status would render as an uncoloured row that looks like a bug.
-const SHOP_STATUS = ["buy", "queued", "held", "blocked", "never", "got"];
+// "bring" added 2026-08-26: a row somebody hands him rather than one he buys.
+// David's parents drive up on the 29th and he wanted a list of things to bring
+// from home. It is deliberately NOT "buy": the Today card only surfaces "buy",
+// and asking him to purchase something that is already sitting in his parents'
+// house is exactly the kind of wrong row he asked to stop seeing.
+const SHOP_STATUS = ["buy", "bring", "queued", "held", "blocked", "never", "got"];
 
 function validateShopItem(it, at) {
   if (!it || typeof it !== "object") return `${at} must be an object`;

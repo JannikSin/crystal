@@ -602,6 +602,17 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
   font-size:.62rem;letter-spacing:.06em;color:var(--faint)}
 .trfoot .tract{color:var(--accent-ink)}
 
+/* The follow-up clock (2026-08-26). Deliberately louder than .trfoot: this is
+   the line that answers "how long has this been sitting", which was the whole
+   reason David asked for it. Overdue turns the day count warn-coloured rather
+   than red, because eleven simultaneously-red rows read as noise, not urgency. */
+.trclock{display:flex;gap:10px;flex-wrap:wrap;margin-top:5px;font-family:var(--mono);
+  font-size:.66rem;letter-spacing:.06em;color:var(--dim)}
+.trclock .trsince{color:var(--faint)}
+.trclock.overdue .trsince{color:var(--warn);font-weight:600}
+.trclock .trnext{color:var(--accent-ink)}
+.trmove{margin-top:4px;font-size:.85rem;line-height:1.4;color:var(--ink)}
+
 /* =========================================================================
    LISTEN: the walkman
    A media queue. Big rounded rows, emoji tag chips, length badges, a filter
@@ -904,6 +915,8 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
   border-color:var(--warnbg);background:var(--warnbg)}
 .aislesec.s-never .sh .chip{color:var(--down);border-color:var(--downbg);background:var(--downbg)}
 .aislesec.s-got .sh .chip{color:var(--up);border-color:var(--upbg);background:var(--upbg)}
+/* "from home": somebody hands it to him, so it reads as good news, not a task */
+.aislesec.s-bring .sh .chip{color:var(--up);border-color:var(--upbg);background:var(--upbg)}
 .secnote{margin:8px 0 0;font-size:.82rem;color:var(--dim);line-height:1.45}
 
 .buyrow{border-bottom:1px solid var(--hairline)}

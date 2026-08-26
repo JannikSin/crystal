@@ -221,6 +221,21 @@ function trackerBlock(rows) {
     if (r.status) top.appendChild(el("span", { class: "badge" + (r.kind ? " " + r.kind : "") }, md(r.status)));
     row.appendChild(top);
     if (r.ask) row.appendChild(el("div", { class: "trask" }, md(r.ask)));
+
+    // The four things David asked for on 2026-08-26, in his order: how long it
+    // has been, which channel it went out on, which channel comes next, and the
+    // one next move. They are computed on the laptop (push_career._followup) so
+    // the day count cannot go stale the way a hand-typed one does, and so the
+    // phone and the vault can never disagree about what day it is.
+    if (r.sinceText || r.channel) {
+      const clock = el("div", { class: "trclock" + (r.overdue ? " overdue" : "") });
+      if (r.sinceText) clock.appendChild(el("span", { class: "trsince" }, md(r.sinceText)));
+      if (r.channel) clock.appendChild(el("span", {}, "sent via " + md(r.channel)));
+      if (r.nextChannel) clock.appendChild(el("span", { class: "trnext" }, "next: " + md(r.nextChannel)));
+      row.appendChild(clock);
+    }
+    if (r.nextMove) row.appendChild(el("div", { class: "trmove" }, md(r.nextMove)));
+
     const foot = el("div", { class: "trfoot" });
     if (r.due) foot.appendChild(el("span", {}, "due " + md(r.due)));
     if (r.action) foot.appendChild(el("span", { class: "tract" }, md(r.action)));
