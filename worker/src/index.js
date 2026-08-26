@@ -168,6 +168,26 @@ function phoneAllowed(method, path) {
   return false;
 }
 
+// ---------- open submission: the ✎ button, no key at all ----------
+// David, 2026-08-26: "I'd just prefer if it didn't require a Crystal key to
+// submit improvements." So the two Desk WRITE routes accept a keyless POST.
+// Write-only and inbox-only by design: a keyless caller can drop a note in and
+// read nothing back, so nothing in the vault, the brief, money or holdings is
+// exposed by this. Everything else still demands the key.
+const OPEN_POST = ["/desk", "/deskaudio"];
+
+// The one guard that costs David nothing: these apps are on public GitHub
+// Pages, so the worker URL is readable in suggest.js by anyone. A browser sets
+// Origin on every cross-origin POST and page script cannot forge it, which
+// keeps a drive-by scanner out while asking him for nothing. A keyed request
+// skips this entirely (the laptop and cron send no Origin).
+const OPEN_ORIGINS = ["https://janniksin.github.io", "http://localhost", "http://127.0.0.1"];
+function openAllowed(request, method, path) {
+  if (method !== "POST" || !OPEN_POST.includes(path)) return false;
+  const o = request.headers.get("origin") || "";
+  return OPEN_ORIGINS.some((a) => o === a || o.startsWith(a + ":"));
+}
+
 const clip = (v, n) => String(v ?? "").slice(0, n);
 
 const capFor = (path) => BODY_CAP[path] || MAX_BODY;
@@ -376,7 +396,9 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
-    const who = role(request, env);
+    // "open" is the keyless ✎ submitter: it may POST a Desk note and nothing
+    // else, so it never reaches the phone/laptop allowlist below.
+    const who = role(request, env) || (openAllowed(request, method, path) ? "open" : null);
     if (!who) return json(401, { error: "bad key" });
     if (who === "phone" && !phoneAllowed(method, path))
       return json(403, { error: "laptop key required for this route" });
