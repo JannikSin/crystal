@@ -25,6 +25,57 @@ export function lsDel(k) {
   try { localStorage.removeItem(k); } catch (e) {}
 }
 
+// ---------- big-payload storage (IndexedDB) ----------
+// localStorage is ~5 MB per ORIGIN, counted in UTF-16, and the origin is shared
+// with five sibling PWAs. The library payload alone was 2.3 MB of JSON (4.6 MB
+// as UTF-16), which is why its offline save kept being refused. IndexedDB's
+// quota is hundreds of MB, so payloads that size live there instead.
+// A separate DATABASE, not a second store in "crystal": sync.js opens that one
+// pinned at version 1, and a version bump here would VersionError it there.
+const KV_DB = "crystal-kv";
+const KV_STORE = "kv";
+
+function kvDb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(KV_DB, 1);
+    r.onupgradeneeded = () => {
+      const db = r.result;
+      if (!db.objectStoreNames.contains(KV_STORE)) db.createObjectStore(KV_STORE);
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+
+export function idbGet(k, fallback) {
+  return kvDb().then((db) => new Promise((res) => {
+    const t = db.transaction(KV_STORE, "readonly");
+    const q = t.objectStore(KV_STORE).get(k);
+    q.onsuccess = () => res(q.result === undefined ? fallback : q.result);
+    q.onerror = () => res(fallback);
+  })).catch(() => fallback);
+}
+// Resolves false when the write did not land (quota, private browsing), same
+// contract as lsSet: a caller that promised something is saved can say
+// otherwise. A failed put leaves any previous value intact.
+export function idbSet(k, v) {
+  return kvDb().then((db) => new Promise((res) => {
+    const t = db.transaction(KV_STORE, "readwrite");
+    t.objectStore(KV_STORE).put(v, k);
+    t.oncomplete = () => res(true);
+    t.onerror = (e) => { e.preventDefault(); res(false); };
+    t.onabort = () => res(false);
+  })).catch(() => false);
+}
+export function idbDel(k) {
+  return kvDb().then((db) => new Promise((res) => {
+    const t = db.transaction(KV_STORE, "readwrite");
+    t.objectStore(KV_STORE).delete(k);
+    t.oncomplete = () => res();
+    t.onerror = () => res();
+  })).catch(() => {});
+}
+
 // Dated caches, keyed <prefix><YYYY-MM-DD>. Nothing older than the day
 // switchers can reach is reachable, so it is only quota being burned.
 const DATED = ["brief.day.", "brief.ticks.", "brief.caps.", "crystal.read.",
@@ -69,6 +120,9 @@ export function clearPayloads() {
       if (k && PAYLOADS.some((p) => k.indexOf(p) === 0)) lsDel(k);
     }
   } catch (e) {}
+  // The library now lives in IndexedDB (see idbSet above); it is a payload
+  // fetched with a key like the rest, so a key change must drop it too.
+  idbDel("crystal.library");
 }
 // One key, one name. The old brief.key fallback is gone with the /brief app.
 export function key() { return localStorage.getItem("crystal.key") || ""; }
@@ -343,6 +397,7 @@ export function forgetPhone() {
     }
   } catch (e) {}
   try { indexedDB.deleteDatabase("crystal"); } catch (e) {}
+  try { indexedDB.deleteDatabase("crystal-kv"); } catch (e) {}
   if (window.caches) {
     // Own prefix ONLY. The sibling PWAs (brief, bonmot, grandstand, tally,
     // finesse) share janniksin.github.io, so a blanket sweep here evicts their

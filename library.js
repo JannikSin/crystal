@@ -17,7 +17,8 @@
 // folder label is the only thing that carries the distinction.
 
 import {
-  root, api, el, md, lsGet, lsSet, go, mastHead, appFooter, emptyState, isTab,
+  root, api, el, md, lsGet, lsSet, lsDel, idbGet, idbSet, go, mastHead, appFooter,
+  emptyState, isTab,
 } from "./core.js";
 
 let library = null;
@@ -30,36 +31,56 @@ let library = null;
 let libFilter = "";
 
 export function open(parts) {
-  library = library || lsGet("crystal.library", null);
   if (parts && parts[1]) { loadNote(parts[1]); return; }
   load(false);
 }
 
+// The saved vault, wherever it lives. The library moved from localStorage to
+// IndexedDB on 2026-08-29 (session hugoniot): localStorage is ~5 MB per origin
+// in UTF-16 and shared with five sibling PWAs, and this payload alone had
+// outgrown it, so every push past ~2 MB silently stopped saving for offline.
+// IndexedDB's quota is hundreds of MB and the ceiling is gone.
+// A phone that saved the vault before the move still holds it under the old
+// localStorage key: use it once, copy it into IndexedDB, and delete the old
+// copy, which hands ~4.6 MB of shared-origin quota back to the other apps.
+function cachedLibrary() {
+  if (library) return Promise.resolve(library);
+  return idbGet("crystal.library", null).then((v) => {
+    if (v) { lsDel("crystal.library"); return v; }
+    const old = lsGet("crystal.library", null);
+    if (old) idbSet("crystal.library", old).then((ok) => { if (ok) lsDel("crystal.library"); });
+    return old;
+  });
+}
+
 function load(force) {
-  library = lsGet("crystal.library", null);
-  if (library && !force) renderIndex("");
-  api("/library")
-    .then((data) => {
-      library = data;
-      // The vault is the biggest payload the phone holds and the origin is
-      // shared with the other PWAs. A refused write means no offline reading,
-      // which is the whole point of this tab, so it is said out loud.
-      // localStorage computes the size delta and throws BEFORE mutating, so a
-      // refused write leaves any previous copy intact. Say which of the two
-      // actually happened: "nothing saved" and "an older copy is still there"
-      // are very different things to discover in a basement with no signal.
-      const had = !!lsGet("crystal.library", null);
-      const cached = lsSet("crystal.library", data);
-      renderIndex(cached ? "" : had
-        ? "Too big to save on this phone. You are seeing the current notes now, but offline you will get the older saved copy."
-        : "Too big to save on this phone. The notes are here now, but nothing is saved for offline.");
-    })
-    .catch((e) => {
-      if (e === "auth") return;
-      if (e === "empty") { renderIndex("", true); return; }
-      if (library) renderIndex("Offline. Showing the cached vault.");
-      else renderIndex("", true);
-    });
+  cachedLibrary().then((cached) => {
+    library = cached;
+    if (library && !force) renderIndex("");
+    api("/library")
+      .then((data) => {
+        library = data;
+        renderIndex("");
+        // A refused write means no offline reading, which is the whole point
+        // of this tab, so it is said out loud. With IndexedDB it should take
+        // private browsing or a full disk, not a big vault, but the promise is
+        // the same: say which of the two states the phone is actually in,
+        // because "nothing saved" and "an older copy is still there" are very
+        // different things to discover in a basement with no signal. A failed
+        // put leaves the previous copy intact.
+        idbSet("crystal.library", data).then((saved) => {
+          if (!saved) renderIndex(cached
+            ? "Could not save the update on this phone. You are seeing the current notes now, but offline you will get the older saved copy."
+            : "Could not save on this phone. The notes are here now, but nothing is saved for offline.");
+        });
+      })
+      .catch((e) => {
+        if (e === "auth") return;
+        if (e === "empty") { renderIndex("", true); return; }
+        if (library) renderIndex("Offline. Showing the cached vault.");
+        else renderIndex("", true);
+      });
+  });
 }
 
 const notes = () => (library && library.notes) || [];
@@ -357,14 +378,16 @@ function renderIndex(note, noLibrary) {
 
 // ---------- reader ----------
 function loadNote(id) {
-  library = library || lsGet("crystal.library", null);
-  if (!library) {
-    api("/library").then((data) => {
-      library = data; lsSet("crystal.library", data); renderNote(id);
-    }).catch(() => go("#/library"));
-    return;
-  }
-  renderNote(id);
+  cachedLibrary().then((cached) => {
+    library = cached;
+    if (!library) {
+      api("/library").then((data) => {
+        library = data; idbSet("crystal.library", data); renderNote(id);
+      }).catch(() => go("#/library"));
+      return;
+    }
+    renderNote(id);
+  });
 }
 
 function renderNote(id) {

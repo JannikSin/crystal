@@ -48,7 +48,11 @@
 // v25: the brand roster and the suggestions queue land in the Shop tab
 //      (shopping.js + .rost/.brand CSS). David asked to see what bolt is
 //      following and where a suggested brand shows up. Paired change.
-const CACHE = "crystal-v27";
+// v28: the Library cache moves from localStorage to IndexedDB (core.js gains
+//      idbGet/idbSet/idbDel, library.js uses them and migrates the old
+//      localStorage copy). Paired change: new library.js against an old core.js
+//      is an ImportError and a blank tab.
+const CACHE = "crystal-v28";
 
 const PRECACHE = [
   "./",
