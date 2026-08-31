@@ -417,9 +417,18 @@ function sectionBlock(s, rows) {
             ? `next: ${buys[at].name} · ${at + 1} of ${buys.length} ↗`
             : `all ${buys.length} opened · start over`;
       };
+      // Third attempt, 2026-08-31. David, 2026-08-26: "open all 10 on Amazon
+      // one at a time, did not work. Each individual link does work." The
+      // individual links are real anchors; this button used window.open with a
+      // features string, which the home-screen standalone app treats as a popup
+      // and swallows without a word. So it navigates the way the links that DO
+      // work navigate: a real anchor, clicked.
       btn.addEventListener("click", () => {
         if (at >= buys.length) { at = 0; paint(); return; }
-        window.open(buys[at].url, "_blank", "noopener");
+        const a = el("a", { href: buys[at].url, target: "_blank", rel: "noopener" }, "");
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
         at += 1;
         paint();
       });
