@@ -52,7 +52,12 @@
 //      idbGet/idbSet/idbDel, library.js uses them and migrates the old
 //      localStorage copy). Paired change: new library.js against an old core.js
 //      is an ImportError and a blank tab.
-const CACHE = "crystal-v28";
+// v30: the front page (David's spec 2026-09-03). today.js gains dueSection()
+//      and tabStrip() above everything and moves the 7-day chips to the foot;
+//      app.css gains the .front-due/.front-tabs/.duelist/.tabstrip rules. The
+//      module and the CSS must land together or the first screen renders
+//      unstyled, so this is a paired change and the bump is mandatory.
+const CACHE = "crystal-v30";
 
 const PRECACHE = [
   "./",

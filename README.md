@@ -1,5 +1,9 @@
 # Crystal
 
+**Governing document: [`DOCTRINE.md`](DOCTRINE.md).** It outranks this file where they
+disagree, and holds what is true regardless of the code: the job, the prohibitions, the
+settled decisions and their reasons, the armed failure modes, and the kill conditions.
+
 A small installable web app (PWA): a personal command center in six tabs on a
 phone. Today (a vertical day timeline with checkboxes), News (a ranked daily
 news edition), Markets (an evening market digest as a ticker terminal), Money

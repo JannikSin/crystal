@@ -108,6 +108,65 @@ function posValue(pos) {
   return q && typeof q.price === "number" ? posShares(pos) * q.price : null;
 }
 
+// ---- ownership, the thing every window on this tab is now clipped to ----
+// A price move that happened before he owned the shares is not his gain and
+// must never be drawn or counted as one.
+const ptMs = (pt) => (typeof pt.t === "number" ? pt.t : Date.parse(pt.t));
+
+function firstLotMs(pos) {
+  let first = null;
+  (pos.lots || []).forEach((l) => {
+    if (!l.fillDate) return;
+    const t = Date.parse(l.fillDate + "T00:00:00");
+    if (!isNaN(t) && (first === null || t < first)) first = t;
+  });
+  return first;
+}
+
+function heldDays(pos) {
+  const f = firstLotMs(pos);
+  return f === null ? null : Math.floor((Date.now() - f) / 86400000);
+}
+
+// basis per share: the price he actually paid, and the dashed line on the row
+function basisPerShare(pos) {
+  const sh = posShares(pos);
+  return sh ? posBasis(pos) / sh : null;
+}
+
+// Drop every point from before the first fill. Keeps at least two points so a
+// position bought yesterday still draws a line rather than vanishing.
+function clipToOwnership(pts, pos) {
+  const f = firstLotMs(pos);
+  if (f === null || !pts || pts.length < 2) return { pts: pts || [], clipped: false };
+  const kept = pts.filter((pt) => ptMs(pt) >= f);
+  if (kept.length < 2) return { pts: pts.slice(-2), clipped: true };
+  return { pts: kept, clipped: kept.length !== pts.length };
+}
+
+// What the selected window actually did to his money, lot by lot. A lot bought
+// INSIDE the window is measured from what he paid for it, not from a price he
+// never traded at; a lot he already held is measured from the window's opening
+// close. The old code summed shares_now * (price - windowOpen) across the whole
+// position, which credits him with a move he was not in. Pass startMs === null
+// for lifetime, where every lot is measured from its own basis.
+function windowDelta(pos, startMs, startClose, price) {
+  let amt = 0, cost = 0, any = false;
+  (pos.lots || []).forEach((l) => {
+    const sh = l.shares || 0;
+    if (!sh) return;
+    const paid = (l.basis || 0) / sh;
+    const fill = l.fillDate ? Date.parse(l.fillDate + "T00:00:00") : null;
+    const heldAtOpen = startMs !== null && fill !== null && fill <= startMs;
+    const ref = heldAtOpen ? startClose : paid;
+    if (ref == null || !isFinite(ref)) return;
+    amt += sh * (price - ref);
+    cost += sh * ref;
+    any = true;
+  });
+  return any ? { amt: amt, pct: cost ? amt / cost : null } : { amt: null, pct: null };
+}
+
 function deltaHtml(amt, pct, cls) {
   const c = dirClass(pct != null ? pct : amt);
   return '<span class="delta ' + c + (cls ? " " + cls : "") + '">' + arrowOf(pct != null ? pct : amt) +
@@ -122,19 +181,28 @@ const SEL_LABEL = { day: "day", week: "week", month: "month", life: "lifetime" }
 // beside it is what actually states the change, never the colour alone.
 const SPARK_W = 120, SPARK_H = 36, SPARK_PAD = 3;
 
-function sparkSvg(pts, cls) {
+function sparkSvg(pts, cls, basis) {
   const open = '<svg width="' + SPARK_W + '" height="' + SPARK_H + '" viewBox="0 0 ' +
     SPARK_W + " " + SPARK_H + '" aria-hidden="true">';
   if (!pts || pts.length < 2) return open + "</svg>";
   let min = Infinity, max = -Infinity;
   pts.forEach((p) => { if (p.c < min) min = p.c; if (p.c > max) max = p.c; });
+  // The basis is inside the drawn range on purpose: "the line is above what I
+  // paid" has to be true on the picture, not only in the number beside it.
+  const showBasis = typeof basis === "number" && isFinite(basis);
+  if (showBasis) { if (basis < min) min = basis; if (basis > max) max = basis; }
   if (min === max) { min -= 1; max += 1; }
   const X = (i) => SPARK_PAD + (i / (pts.length - 1)) * (SPARK_W - 2 * SPARK_PAD);
   const Y = (c) => SPARK_PAD + (1 - (c - min) / (max - min)) * (SPARK_H - 2 * SPARK_PAD);
   const d = pts.map((p, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(p.c).toFixed(1)).join("");
   const color = cls === "up" ? "var(--up)" : cls === "down" ? "var(--down)" : "var(--faint)";
   const last = pts.length - 1;
-  return open +
+  const basisLine = showBasis
+    ? '<line x1="' + SPARK_PAD + '" y1="' + Y(basis).toFixed(1) + '" x2="' + (SPARK_W - SPARK_PAD) +
+      '" y2="' + Y(basis).toFixed(1) +
+      '" stroke="var(--faint)" stroke-width="1" stroke-dasharray="2 3"/>'
+    : "";
+  return open + basisLine +
     '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="1.6"' +
     ' stroke-linejoin="round" stroke-linecap="round"/>' +
     '<circle cx="' + X(last).toFixed(1) + '" cy="' + Y(pts[last].c).toFixed(1) +
@@ -213,13 +281,32 @@ function renderMoney(note, noHoldings) {
   });
   root.appendChild(seg);
 
+  // ---- what the numbers mean, said out loud ----
+  // David, 2026-08-31: "I don't entirely understand what it even means."
+  // He was right that nothing on this tab ever said.
+  const CAPTION = {
+    day: "Today's move against yesterday's close, on every share you hold.",
+    week: "The last 7 days, counted only from the days you actually owned it.",
+    month: "The last 30 days, counted only from the days you actually owned it.",
+    life: "What it is worth now minus what you paid. The line runs from your first buy.",
+  };
+  const cap = el("p", { class: "selcap" }, CAPTION[sel] +
+    " Dotted line is what you paid per share.");
+  root.appendChild(cap);
+
   // ---- position rows ----
   // One row per position: ticker, value, the signed change for the selected
-  // window, and the shape of the price over that same window. "life" has no
-  // window to draw, so it borrows the month line and states the life number.
-  const range = sel === "week" ? "1w" : sel === "day" ? "1d" : "1m";
+  // window, and the shape of the price over that same window.
+  // "life" draws the MAX series clipped to his first fill. It used to borrow the
+  // "1m" series, which is why month and lifetime drew an identical shape and
+  // differed only in colour: David's complaint, and it was exactly true.
+  const range = sel === "week" ? "1w" : sel === "day" ? "1d" : sel === "life" ? "max" : "1m";
   const rows = el("div", { class: "sparks" });
-  positions.forEach((p) => {
+  // A ticker with no lots is a watchlist name, not a position. It used to render
+  // as a row worth $0.00 with a flat line, which reads as a holding that died.
+  const held = positions.filter((p) => posShares(p) > 0);
+  const watch = positions.filter((p) => posShares(p) <= 0);
+  held.forEach((p) => {
     const q = quotes[p.ticker];
     const val = posValue(p);
     const basis = posBasis(p);
@@ -231,6 +318,11 @@ function renderMoney(note, noHoldings) {
     left.appendChild(dline);
     const ltcg = ltcgBadge(p);
     if (ltcg) left.appendChild(el("div", { class: "ltcg" }, ltcg));
+    // How long he has actually held it, because it is the whole reason a
+    // "month" number can be shorter than a month.
+    const hd = heldDays(p);
+    if (hd !== null) left.appendChild(el("div", { class: "heldfor" },
+      "held " + (hd < 1 ? "today" : hd + "d")));
     row.appendChild(left);
     const sp = el("div", { class: "sp" }, sparkSvg(null));
     row.appendChild(sp);
@@ -239,28 +331,46 @@ function renderMoney(note, noHoldings) {
     row.addEventListener("keydown", (e) => { if (e.key === "Enter") openDetail(); });
     rows.appendChild(row);
 
+    const bps = basisPerShare(p);
     const apply = (pct, amt, pts) => {
       dline.innerHTML = amt !== null ? deltaHtml(amt, pct) : '<span class="delta">--</span>';
-      sp.innerHTML = sparkSvg(pts, dirClass(pct != null ? pct : amt));
+      sp.innerHTML = sparkSvg(pts, dirClass(pct != null ? pct : amt), bps);
     };
     if (val === null) return;
     // the callback can fire synchronously out of the client cache, which is
     // fine: the row holds its own elements and never looks itself up
     refPrice(p.ticker, range, (h) => {
-      const pts = (h && h.points) || [];
-      if (sel === "life") { apply(basis ? (val - basis) / basis : null, val - basis, pts); return; }
+      const raw = (h && h.points) || [];
+      // Every window is clipped to ownership before it is drawn OR counted.
+      const clip = clipToOwnership(raw, p);
+      const pts = clip.pts;
+      if (sel === "life") {
+        // startMs null: every lot measured from its own basis, which is the
+        // only definition of lifetime that is true for a multi-lot position.
+        const d = windowDelta(p, null, null, q ? q.price : null);
+        apply(d.pct, d.amt, pts);
+        return;
+      }
       if (sel === "day") {
         if (q && typeof q.prevClose === "number" && q.prevClose) {
           apply((q.price - q.prevClose) / q.prevClose, posShares(p) * (q.price - q.prevClose), pts);
         } else apply(null, null, pts);
         return;
       }
-      const ref = pts.length ? pts[0].c : null;
-      if (ref) apply((q.price - ref) / ref, posShares(p) * (q.price - ref), pts);
-      else apply(null, null, pts);
+      if (!pts.length || !q || typeof q.price !== "number") { apply(null, null, pts); return; }
+      const d = windowDelta(p, ptMs(pts[0]), pts[0].c, q.price);
+      apply(d.pct, d.amt, pts);
     });
   });
   root.appendChild(rows);
+
+  // ---- watchlist, no position ----
+  if (watch.length) {
+    const w = el("div", { class: "watchstrip" });
+    w.appendChild(el("span", { class: "eyebrow" }, "watchlist, nothing held"));
+    w.appendChild(el("span", { class: "wt" }, watch.map((p) => p.ticker).join(" · ")));
+    root.appendChild(w);
+  }
 
   // ---- get the money ----
   const gm = getTheMoney(holdings);

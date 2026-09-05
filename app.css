@@ -470,6 +470,16 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
   font-variant-numeric:tabular-nums;line-height:1.25}
 .spark .d{font-family:var(--mono);font-size:.74rem}
 .spark .ltcg{margin-top:5px}
+.spark .heldfor{font-family:var(--mono);font-size:.66rem;color:var(--dim);margin-top:3px;
+  letter-spacing:.04em}
+/* Says what the selected window is measuring. Added 2026-09-02: the tab had a
+   day/week/month/lifetime selector and never once stated the basis of the
+   number, so month (a price return) and lifetime (a cost-basis return) read as
+   the same kind of thing. */
+.selcap{font-size:.72rem;line-height:1.4;color:var(--dim);margin:8px 2px 0}
+.watchstrip{display:flex;align-items:baseline;gap:10px;margin-top:10px;padding:9px 14px;
+  background:var(--card);border:1px solid var(--edge);border-radius:12px}
+.watchstrip .wt{font-family:var(--mono);font-size:.74rem;letter-spacing:.08em;color:var(--dim)}
 .spark .sp{flex:0 0 120px;height:36px}
 .spark .sp svg{display:block}
 .ledger{margin-top:18px;background:var(--card);border:1px solid var(--edge);border-radius:14px;
@@ -904,6 +914,12 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
   background:var(--card);border:1px solid var(--edge);text-decoration:none;
   font-family:var(--mono);font-size:.78rem;letter-spacing:.06em;color:var(--accent-ink)}
 .aislesec .cartall:active{background:var(--edge)}
+/* The bulk opener is an ANCHOR now, not a button (2026-09-02): window.open is a
+   silent no-op in an iOS standalone PWA, which is why David reported it simply
+   did not work while the per-row links did. These rules make an <a> sit exactly
+   where the <button> sat. */
+.aislesec a.cartall{text-decoration:none;color:inherit;-webkit-tap-highlight-color:transparent}
+.aislesec .cartall.done{opacity:.55;cursor:default}
 .aislesec .sh{display:flex;align-items:center;gap:9px;font-family:var(--mono);
   font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);
   padding-bottom:6px;border-bottom:1px solid var(--edge)}
@@ -1012,3 +1028,42 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
 .bubblepanel .mic{width:38px;height:38px;border-radius:50%;border:1px solid var(--edge);
   background:var(--bg);font-size:1rem;cursor:pointer}
 .bubblepanel .mic.on{background:var(--down);border-color:var(--down)}
+
+/* ---------------------------------------------------------- the front page
+   David, 2026-09-03: "The first thing I look at should be a dashboard... Like
+   the front page of a newspaper: it tells you everything that's inside, and if
+   you want to go deeper you go into a different tab."
+   So it reads as a front page: serif section heads over a hairline, the due
+   work set in the reading face, and the tab strip as standing column heads.  */
+.front-due, .front-tabs{margin:18px 0 0}
+.front-due h2, .front-tabs h2{
+  margin:0 0 9px;font-family:var(--serif);font-weight:600;font-size:1.06rem;
+  letter-spacing:.01em;color:var(--ink);
+  padding-bottom:6px;border-bottom:1px solid var(--edge)}
+.front-clear{margin:0;color:var(--dim);font-family:var(--serif);font-style:italic;font-size:.95rem}
+
+.duelist{list-style:none;margin:0;padding:0}
+.duelist li{padding:9px 0;border-bottom:1px solid var(--hairline);
+  display:flex;flex-direction:column;gap:3px}
+.duelist li:last-child{border-bottom:none}
+.duetext{font-family:var(--serif);font-size:1rem;line-height:1.32;color:var(--ink)}
+.duemeta{display:flex;gap:7px;align-items:center;flex-wrap:wrap;
+  font-size:.76rem;color:var(--faint)}
+.duewhen{padding:1px 8px;border-radius:99px;border:1px solid var(--edge);color:var(--dim)}
+/* Overdue is never colour alone: the pill says how many days, and the word
+   "over" is in the text. The tint only ranks what the words already say. */
+.duelist li.over .duewhen{color:var(--down);background:var(--downbg);
+  border-color:color-mix(in srgb, var(--down) 35%, var(--edge))}
+.dueowner{color:var(--faint)}
+.dueowner::before{content:"· "}
+
+.tabstrip{list-style:none;margin:0;padding:0}
+.tabstrip li{border-bottom:1px solid var(--hairline)}
+.tabstrip li:last-child{border-bottom:none}
+.tablink{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;
+  background:none;border:none;cursor:pointer;padding:10px 0;color:inherit;font:inherit}
+.tablink:active{background:var(--press)}
+.tabname{font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--accent-ink);font-weight:600}
+.tabtop{font-family:var(--serif);font-size:.97rem;line-height:1.34;color:var(--ink)}
+.tabstrip li.empty .tabtop{color:var(--faint);font-style:italic}

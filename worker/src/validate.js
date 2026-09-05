@@ -221,6 +221,38 @@ export function validateBriefV2(p) {
     const bad = validateReward(p.reward);
     if (bad) return bad;
   }
+  // The front page (David's spec 2026-09-03): due-today rows plus one line per
+  // tab. Optional, so an older laptop build still pushes; but if it is present
+  // it is checked, because this block is the first thing on his screen and a
+  // malformed row there is a blank first screen rather than a bad card.
+  if (p.front !== undefined) {
+    const f = p.front;
+    if (!f || typeof f !== "object") return "front must be an object";
+    if (!isArr(f.due)) return "front.due must be an array";
+    if (f.due.length > 20) return "front.due: more than 20 rows, that is not a day";
+    for (let i = 0; i < f.due.length; i++) {
+      const d = f.due[i];
+      if (!d || typeof d !== "object") return `front.due[${i}] must be an object`;
+      if (!ID_RE.test(d.id || "")) return `front.due[${i}].id must match ${ID_RE}`;
+      if (!isTxt(d.text)) return `front.due[${i}].text required`;
+      if (d.owner !== undefined && !isStr(d.owner)) return `front.due[${i}].owner must be a string`;
+      if (d.due !== undefined && d.due !== "" && !DATE_RE.test(d.due))
+        return `front.due[${i}].due must be YYYY-MM-DD`;
+      if (d.days !== undefined && typeof d.days !== "number")
+        return `front.due[${i}].days must be a number`;
+    }
+    if (!isArr(f.tabs)) return "front.tabs must be an array";
+    if (f.tabs.length > 12) return "front.tabs: more than 12 tabs";
+    for (let i = 0; i < f.tabs.length; i++) {
+      const t = f.tabs[i];
+      if (!t || typeof t !== "object") return `front.tabs[${i}] must be an object`;
+      if (!isTxt(t.tab)) return `front.tabs[${i}].tab required`;
+      if (!isTxt(t.label)) return `front.tabs[${i}].label required`;
+      if (!isStr(t.line)) return `front.tabs[${i}].line must be a string`;
+      if (t.empty !== undefined && typeof t.empty !== "boolean")
+        return `front.tabs[${i}].empty must be a boolean`;
+    }
+  }
   if (!isArr(p.timeline)) return "timeline must be an array";
   if (p.timeline.length > 40) return "timeline: more than 40 items, that is not a day";
   // kind "group" holds child items (Morning routine > Supplements). Children

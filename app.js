@@ -107,13 +107,22 @@ let bchunks = [];
 let bstart = 0;
 let btick = null;
 let bcap = null;
-// 5 minutes, raised from 3 on 2026-08-22 now that the screen no longer dies
-// mid-note. The real ceiling is the Worker's 6 MB /deskaudio cap, and the
-// bitrate below is what keeps a five-minute note comfortably inside it:
-// 64 kbps mono is more than speech recognition needs, and 5 min of it is
-// about 2.4 MB, which also matters on a cell connection in a gym.
-const BUBBLE_MAX_MS = 300000;
+// The cap is DERIVED, not chosen. 2026-09-02, David: "fix the transcription
+// audio cutoff length, it shouldn't have a cutoff or limit."
+//
+// Nothing in the transcriber ever had a length limit; faster-whisper streams a
+// file of any size. The limit was this timer, and this timer existed only
+// because the Worker refused a /deskaudio body over 6 MB. That cap is now
+// 20 MB (a single Cloudflare KV value tops out at 25 MB and the audio is
+// KV-stored), so the recording ceiling is computed from the budget and the
+// bitrate rather than being a magic number somebody has to raise again:
+//   64 kbps = 8,000 bytes/s = 480 KB per minute
+//   14 MB budget / 8,000 = 1,835 s, about 30 minutes
+// The 6 MB of headroom between the budget and the Worker cap absorbs mp4
+// container overhead, so a long note can never come back as a 413.
 const BUBBLE_BPS = 64000;
+const BUBBLE_BUDGET_BYTES = 14 * 1024 * 1024;
+const BUBBLE_MAX_MS = Math.floor(BUBBLE_BUDGET_BYTES / (BUBBLE_BPS / 8)) * 1000;
 const mmss = (ms) => {
   const s = Math.max(0, Math.round(ms / 1000));
   return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
@@ -180,7 +189,7 @@ bmic.addEventListener("click", async () => {
     }, 500);
     bcap = setTimeout(() => {
       if (brec && brec.state === "recording") {
-        bstat.textContent = "5 minutes is the cap, stopping and sending";
+        bstat.textContent = mmss(BUBBLE_MAX_MS) + " is the cap, stopping and sending";
         brec.stop();
       }
     }, BUBBLE_MAX_MS);

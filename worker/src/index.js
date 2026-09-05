@@ -101,8 +101,13 @@ const MAX_BODY = 1024 * 1024;
 // warns well below this number for that reason.
 const BODY_CAP = {
   "/scan": 2 * 1024 * 1024,
-  "/answer": 6 * 1024 * 1024,
-  "/deskaudio": 6 * 1024 * 1024,
+  // 6 MB until 2026-09-02, which is what forced the phone's 5-minute recording
+  // cap. David: "it shouldn't have a cutoff or limit." A single KV value tops
+  // out at 25 MB and the audio is KV-stored, so 20 MB is the real ceiling with
+  // room for the metadata write beside it. At the recorder's 64 kbps that is
+  // over 40 minutes of speech; the phone stops itself at 30 to stay clear.
+  "/answer": 20 * 1024 * 1024,
+  "/deskaudio": 20 * 1024 * 1024,
   "/library": 4 * 1024 * 1024,
 };
 const BLOB_TTL = 14 * 24 * 3600;

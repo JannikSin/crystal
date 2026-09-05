@@ -9,7 +9,7 @@
 
 import {
   root, api, el, md, blockMd, lsGet, lsSet, todayIso, shiftIso, fmtBuilt,
-  appFooter, renderDays, pruneDated, WORKER, key, isTab,
+  appFooter, renderDays, pruneDated, WORKER, key, isTab, go,
 } from "./core.js";
 import {
   localTicks, isDone, setTick, tickControl, flush,
@@ -110,8 +110,14 @@ function render(offlineNote, emptyDayNote) {
 
   root.appendChild(header());
 
+  // The 7-day chips used to sit here, directly under the masthead. David,
+  // 2026-09-03: "Right now the first tab that opens is like this timeline thing
+  // with a bunch of checklists... That should not be the first thing I see. For
+  // timelines, what I use is Google Calendar." So the day picker moves to the
+  // BOTTOM rather than being deleted: it is still the only way to open an
+  // earlier day and tick it, and removing it would cost that outright, which he
+  // did not ask for. It just stops being the first thing on the screen.
   const latestDate = (lsGet("brief.last", null) || {}).date || todayIso();
-  root.appendChild(renderDays(viewDate || latestDate, (dateOrEmpty) => pickDay(dateOrEmpty)));
 
   if (offlineNote) root.appendChild(el("div", { class: "banner" }, offlineNote));
   if (brief && viewDate && viewDate !== todayIso()) {
@@ -176,6 +182,16 @@ function render(offlineNote, emptyDayNote) {
     paintReward();
   }
 
+  // ---- the front page, above everything else ----
+  // Only on today. An earlier day's front page would be a dashboard of what is
+  // true NOW pretending to belong to a past date, which is the exact confusion
+  // the stale-brief banner already exists to prevent.
+  if (isToday || stale) {
+    const fp = brief.front;
+    if (fp && Array.isArray(fp.due)) root.appendChild(dueSection(fp.due));
+    if (fp && Array.isArray(fp.tabs)) root.appendChild(tabStrip(fp.tabs));
+  }
+
   if (brief.scoreboard && brief.scoreboard.length) root.appendChild(scoreboard(brief.scoreboard));
 
   root.appendChild(timeline(date));
@@ -183,9 +199,61 @@ function render(offlineNote, emptyDayNote) {
   renderCards(root, brief.cards || [], date, local);
 
   root.appendChild(boardSection());
+  root.appendChild(renderDays(viewDate || latestDate, (dateOrEmpty) => pickDay(dateOrEmpty)));
   root.appendChild(appFooter(() => pickDay(viewDate, true)));
   paintMeter();
   flush();
+}
+
+// Markets merged into the Money tab, and Shop's route is #/shopping. Kept here
+// rather than in the payload because a route is the app's business, not the
+// laptop's: a renamed tab must not require a laptop push to fix the links.
+const TAB_ROUTE = {
+  news: "news", markets: "money", money: "money", career: "career",
+  listen: "listen", shop: "shopping", library: "library",
+};
+
+function dueSection(rows) {
+  const sec = el("section", { class: "front-due" });
+  sec.appendChild(el("h2", {}, "Due today"));
+  if (!rows.length) {
+    sec.appendChild(el("p", { class: "front-clear" }, "Nothing is due or overdue. The board is clear."));
+    return sec;
+  }
+  const ul = el("ul", { class: "duelist" });
+  rows.forEach((r) => {
+    const li = el("li", { class: (r.days || 0) < 0 ? "due over" : "due" });
+    li.appendChild(el("span", { class: "duetext" }, md(String(r.text || ""))));
+    const meta = el("span", { class: "duemeta" });
+    const n = Number(r.days || 0);
+    // "14 days over" is a fact he can act on; a bare red dot is not.
+    meta.appendChild(el("span", { class: "duewhen" },
+      n < 0 ? Math.abs(n) + (Math.abs(n) === 1 ? " day over" : " days over") : "today"));
+    if (r.owner) meta.appendChild(el("span", { class: "dueowner" }, String(r.owner)));
+    li.appendChild(meta);
+    ul.appendChild(li);
+  });
+  sec.appendChild(ul);
+  return sec;
+}
+
+function tabStrip(tabs) {
+  const sec = el("section", { class: "front-tabs" });
+  sec.appendChild(el("h2", {}, "Everything else"));
+  const ul = el("ul", { class: "tabstrip" });
+  tabs.forEach((t) => {
+    const route = TAB_ROUTE[t.tab];
+    if (!route) return;                       // a tab this build does not have
+    const li = el("li", { class: t.empty ? "tabline empty" : "tabline" });
+    const btn = el("button", { type: "button", class: "tablink" });
+    btn.appendChild(el("span", { class: "tabname" }, String(t.label || t.tab)));
+    btn.appendChild(el("span", { class: "tabtop" }, md(String(t.line || ""))));
+    btn.addEventListener("click", () => go("#/" + route));
+    li.appendChild(btn);
+    ul.appendChild(li);
+  });
+  sec.appendChild(ul);
+  return sec;
 }
 
 function header() {
@@ -430,7 +498,11 @@ function groupRow(date, it, nested) {
 // start/stop only. No pause: WebKit's paused MediaRecorder records silence.
 // A rep is one answer, not a lecture: five minutes is the hard stop, and the
 // Worker refuses /answer over 6MB, so anything near that never leaves here.
-const MAX_REC_MS = 5 * 60 * 1000;
+// Same arithmetic as the Desk bubble's cap in app.js, and for the same reason:
+// the Worker's /answer cap went 6 MB -> 20 MB on 2026-09-02, so a spoken answer
+// is no longer cut off at five minutes. 14 MB of budget at 64 kbps is about
+// 30 minutes, with headroom left under the Worker cap for container overhead.
+const MAX_REC_MS = Math.floor((14 * 1024 * 1024) / (64000 / 8)) * 1000;
 const MAX_REC_BYTES = 5.5 * 1024 * 1024;
 function pickMime() {
   const want = ["audio/mp4", "audio/webm"];
