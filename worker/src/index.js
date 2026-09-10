@@ -419,7 +419,22 @@ export default {
     if (path === "/brief" && method === "GET") {
       const raw = await getDated(env, "brief", qdate);
       if (!raw) return json(404, { error: "no brief yet" });
+      // The phone reading today's brief IS David opening Crystal. Recorded so the
+      // evening nudge (crystal-assistant/nudge.py) can say "you have not opened
+      // Crystal today" and stay silent when he has (David, 2026-09-05). One small
+      // KV write per open, never per scroll; nothing else is logged.
+      if (who === "phone" && !qdate) {
+        try { await env.STORE.put("seen:brief", new Date().toISOString()); } catch {}
+      }
       return raw200(raw);
+    }
+
+    // ---------- seen ----------
+    // When the phone last opened the brief. Read by nudge.py on the laptop.
+    if (path === "/seen" && method === "GET") {
+      const brief = await env.STORE.get("seen:brief");
+      if (!brief) return json(404, { error: "never seen" });
+      return json(200, { brief });
     }
 
     if (path === "/brief" && method === "POST") {
