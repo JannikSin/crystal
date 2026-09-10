@@ -49,6 +49,7 @@ function render(data, note, empty) {
   if (data.spotlight) root.appendChild(spotCard(data.spotlight));
   if (Array.isArray(data.roster) && data.roster.length) root.appendChild(specList(data.roster, data.spotlight));
   if (data.outreach) root.appendChild(outreachSlip(data.outreach));
+  if (Array.isArray(data.applications)) root.appendChild(applicationsBlock(data.applications));
   if (Array.isArray(data.tracker)) root.appendChild(trackerBlock(data.tracker));
   if (data.signals) root.appendChild(signalsBlock(data.signals));
 
@@ -70,7 +71,7 @@ function paintReps(box, r) {
   const items = (r && Array.isArray(r.items)) ? r.items : [];
   if (!items.length) {
     box.appendChild(el("p", { class: "secnote" },
-      "No graded reps yet. Record on the Today board; grades land here with the 6:30 morning build."));
+      "No graded reps yet. Record on the Today board; grades land here with the 7:30 morning build."));
     return;
   }
   items.forEach((it) => {
@@ -240,6 +241,56 @@ function trackerBlock(rows) {
     if (r.due) foot.appendChild(el("span", {}, "due " + md(r.due)));
     if (r.action) foot.appendChild(el("span", { class: "tract" }, md(r.action)));
     if (foot.childNodes.length) row.appendChild(foot);
+    box.appendChild(row);
+  });
+  return box;
+}
+
+// Applications submitted: every application David has actually SENT, from the
+// vault's Job-Search/Applications-Submitted.md. Asked for 2026-09-10, the
+// morning after he submitted six in one night and had nowhere on the phone that
+// answered "where have I applied?".
+//
+// Deliberately NOT the same thing as Job-Search/Applications-Log.md, which
+// counts every resume BUILT. Seven builds sat finished-but-unsent for two days,
+// and a tracker that counted builds would have shown seven and been lying.
+//
+// Grouped by company because the question is "which companies have I applied
+// to", and three Blue Origin reqs should read as one company with three rows
+// rather than as three separate wins. Article 0: the tab is the glance.
+function applicationsBlock(rows) {
+  const box = el("section", { class: "tracker apps" });
+  box.appendChild(el("div", { class: "sh" },
+    "applications sent · " + rows.length + " across " +
+    new Set(rows.map((r) => r.company)).size + " companies"));
+  if (!rows.length) {
+    box.appendChild(el("p", { class: "secnote" }, "Nothing submitted yet."));
+    return box;
+  }
+  const byCompany = new Map();
+  rows.forEach((r) => {
+    if (!byCompany.has(r.company)) byCompany.set(r.company, []);
+    byCompany.get(r.company).push(r);
+  });
+  byCompany.forEach((list, company) => {
+    const row = el("div", { class: "trow" });
+    const top = el("div", { class: "trtop" });
+    top.appendChild(el("span", { class: "trwho" }, md(company)));
+    top.appendChild(el("span", { class: "badge" },
+      list.length === 1 ? "1 role" : list.length + " roles"));
+    row.appendChild(top);
+    list.forEach((r) => {
+      const line = el("div", { class: "trask" });
+      line.appendChild(el("span", {}, md(r.role)));
+      if (r.req) line.appendChild(el("span", { class: "tract" }, " " + md(r.req)));
+      row.appendChild(line);
+      const foot = el("div", { class: "trfoot" });
+      foot.appendChild(el("span", { class: "badge" + (r.kind ? " " + r.kind : "") }, md(r.status)));
+      // Which build they actually read. This is the cell that matters the week
+      // an interview lands, so it rides on the phone rather than only in the vault.
+      if (r.resume) foot.appendChild(el("span", { class: "tract" }, md(r.resume)));
+      row.appendChild(foot);
+    });
     box.appendChild(row);
   });
   return box;

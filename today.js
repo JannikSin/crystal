@@ -129,15 +129,15 @@ function render(offlineNote, emptyDayNote) {
   } else if (stale) {
     // "Open with signal to refresh" was not true and cost him a morning:
     // refreshing cannot conjure a brief that was never built. The brief is
-    // generated ON THE LAPTOP (CrystalMorning, 06:30 daily plus a catch-up at
+    // generated ON THE LAPTOP (CrystalMorning, 07:30 daily plus a catch-up at
     // logon) and pushed here. A laptop that was OFF, not merely asleep, at
-    // 06:30 builds nothing, and the Worker keeps serving the last day it has.
+    // 07:30 builds nothing, and the Worker keeps serving the last day it has.
     // David, 2026-08-17: "why is this not updating for today, I'm on the
     // Sunday copy when it's Monday, it's Monday at 11 AM." Say the real cause,
     // so the next move is opening the laptop rather than pulling to refresh.
     root.appendChild(el("div", { class: "banner" },
       "This brief is from " + md(brief.day) + ", not today. Anything you tick still counts for today. " +
-      "Today's has not been built yet: that happens on the laptop at 06:30, or whenever it next wakes."));
+      "Today's has not been built yet: that happens on the laptop at 07:30, or whenever it next wakes."));
   }
 
   if (!brief) {
@@ -410,7 +410,14 @@ function row(date, it) {
   const det = el("div", { class: "tl-detail" });
   det.hidden = true;
   det.style.flex = "1 0 100%";
-  if (it.detail) blockMd(det, it.detail);
+  // wrapped, not appended loose: the interview recorder hides this block when
+  // he advances past the first question, so question 2 does not render under
+  // question 1 and its best-take line.
+  if (it.detail) {
+    const dm = el("div", { class: "tl-dm" });
+    blockMd(dm, it.detail);
+    det.appendChild(dm);
+  }
   if (it.kind === "answer") recorder(det, it);
   if (isScanItem(it)) scanControl(det);
   r.appendChild(det);
@@ -513,14 +520,56 @@ function pickMime() {
   return "";
 }
 
+// Recorded on THIS device, keyed by qid. The grader is hours behind the phone
+// (it runs on the laptop, once a day), so the archive cannot be what stops a
+// question being handed back after he just answered it. This can, instantly,
+// offline. {qid: dateIso}.
+const ANSWERED_KEY = "crystal.answeredQids";
+const answeredMap = () => { try { return lsGet(ANSWERED_KEY, {}) || {}; } catch (e) { return {}; } };
+function markAnswered(qid, date) {
+  try {
+    const m = answeredMap();
+    m[qid] = date || todayIso();
+    lsSet(ANSWERED_KEY, m);
+  } catch (e) {}
+}
+
+// A sitting, not a question (David, 2026-09-07): "maybe I have time for three
+// and I want to keep going, maybe I don't have time for any." The whole queue
+// rides on the card, so NEXT QUESTION costs no network and works on the train
+// with no signal. Pure, and exported, so the filtering rules are testable:
+// getting this wrong hands him a question he just answered.
+export function repQueue(it, answered) {
+  const done = answered || {};
+  const raw = (it && Array.isArray(it.queue) && it.queue.length)
+    ? it.queue
+    : ((it && it.qid) ? [{ qid: it.qid, q: "" }] : []);
+  const seen = new Set();
+  return raw.filter((x) => {
+    if (!x || !x.qid || done[x.qid] || seen.has(x.qid)) return false;
+    seen.add(x.qid);
+    return true;
+  }).map((x) => ({ qid: x.qid, q: x.q || "" }));
+}
+
 function recorder(det, it) {
-  const qid = it.qid || "";
+  const queue = repQueue(it, answeredMap());
+  let idx = 0;
+  const curQid = () => ((queue[idx] || {}).qid || "");
+
+  const dm = det.querySelector(".tl-dm");
+  const qLine = el("p", { class: "qnext" }, "");
+  qLine.hidden = true;
+  det.appendChild(qLine);
+
   const box = el("div", { class: "rec" });
   const btn = el("button", { type: "button", "data-on": "0" }, "Record");
   const timer = el("span", { class: "t" }, "0:00");
+  const nextBtn = el("button", { type: "button", class: "nextq" }, "Next question");
   const note = el("div", { class: "note" }, "Start, speak, stop. Leave the app in front and it keeps recording.");
   box.appendChild(btn);
   box.appendChild(timer);
+  box.appendChild(nextBtn);
   box.appendChild(note);
   det.appendChild(box);
 
@@ -530,9 +579,36 @@ function recorder(det, it) {
 
   det.appendChild(el("p", { class: "hint" }, "Grades land on the Career tab, under interview reps."));
 
+  // The first question is already rendered by the card's own markdown, with
+  // its best-take line. From the second on, the recorder owns the question.
+  function paintQ() {
+    const left = queue.length - idx - 1;
+    nextBtn.hidden = left <= 0;
+    nextBtn.textContent = left > 0 ? "Next question (" + left + " left)" : "Next question";
+    if (dm) dm.hidden = idx > 0;
+    qLine.hidden = idx === 0;
+    if (idx > 0) qLine.textContent = (queue[idx] || {}).q || "";
+  }
+  paintQ();
+
   const mime = pickMime();
-  if (!qid) { btn.disabled = true; note.textContent = "No question id on this item, so nothing to file a recording against."; return; }
+  if (!queue.length) {
+    btn.disabled = true;
+    nextBtn.hidden = true;
+    note.textContent = "Every question on today's card is recorded. Grades land on the Career tab.";
+    return;
+  }
   if (mime === null) { btn.disabled = true; note.textContent = "This browser cannot record audio. Speak it out loud anyway."; return; }
+
+  nextBtn.addEventListener("click", () => {
+    // never swap the question out from under a take in progress
+    if (rec && rec.state === "recording") { note.textContent = "Stop the recording first."; return; }
+    if (idx >= queue.length - 1) return;
+    idx += 1;
+    timer.textContent = "0:00";
+    note.textContent = "Start, speak, stop. Leave the app in front and it keeps recording.";
+    paintQ();
+  });
 
   let rec = null, chunks = [], t0 = 0, tick = 0, cap = 0;
   // leaving the app kills the recorder on iOS anyway; stopping it deliberately
@@ -542,6 +618,10 @@ function recorder(det, it) {
   };
   btn.addEventListener("click", async () => {
     if (rec && rec.state === "recording") { rec.stop(); return; }
+    // pinned when the take STARTS, so the upload can never be misfiled against
+    // a question he advanced to while it was running
+    const qid = curQid();
+    if (!qid) { note.textContent = "No question id on this item, so nothing to file a recording against."; return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
@@ -571,9 +651,15 @@ function recorder(det, it) {
           return;
         }
         lsSet("crystal.recorded", (lsGet("crystal.recorded", 0) || 0) + 1);
-        note.textContent = level !== null && level < 0.01
+        // a silent take is not an answer, so it does not retire the question
+        const silent = level !== null && level < 0.01;
+        if (!silent) markAnswered(qid, brief.date);
+        const left = queue.length - idx - 1;
+        note.textContent = silent
           ? "Saved, but the audio looks silent. Check the mic and do it again."
-          : "Saved. Grades run with the 6:30 morning build and land on the Career tab.";
+          : (left > 0
+            ? "Saved. Tap NEXT QUESTION to keep going, " + left + " more on the card."
+            : "Saved. Grades run with the 7:30 morning build and land on the Career tab.");
         paintLive(live);
       };
       // a timeslice means a chunk lands every 5s, so a killed tab costs seconds

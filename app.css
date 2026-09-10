@@ -254,6 +254,12 @@ label.tk input:disabled+.box{opacity:.35}
 @media(prefers-color-scheme:dark){.rec button{color:#16141f}}
 .rec .t{font-family:var(--mono);font-size:.85rem;font-variant-numeric:tabular-nums;color:var(--ink)}
 .rec .note{flex:1 0 100%;font-size:.8rem;color:var(--faint);font-family:var(--mono)}
+/* NEXT QUESTION: secondary to Record, because the sitting is his to end. It
+   sits on the same row so "record, stop, next" is one thumb path. */
+.rec button.nextq{background:transparent;color:var(--accent);
+  border:1px solid var(--accent);font-size:.8rem;padding:6px 10px}
+@media(prefers-color-scheme:dark){.rec button.nextq{color:var(--accent)}}
+.qnext{margin:10px 0 0;font-size:.95rem;line-height:1.45;color:var(--ink)}
 .live{font-family:var(--mono);font-size:.7rem;color:var(--faint);margin-top:8px}
 .graded{margin-top:8px;padding:10px 13px;border-radius:11px;background:var(--soft);
   border:1px solid var(--soft-edge);font-size:.88rem}

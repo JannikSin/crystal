@@ -57,7 +57,18 @@
 //      app.css gains the .front-due/.front-tabs/.duelist/.tabstrip rules. The
 //      module and the CSS must land together or the first screen renders
 //      unstyled, so this is a paired change and the bump is mandatory.
-const CACHE = "crystal-v30";
+// v31: THREE sessions' work, all riding one bump. today.js gains the interview
+//      rep QUEUE and its NEXT QUESTION button (a sitting is one, three or none,
+//      David 2026-09-07) plus the per-device answered map, and app.css gains the
+//      .nextq/.qnext rules, so that pair must land together. career.js gains the
+//      applications block (sophon, David 2026-09-10) and reuses the existing
+//      .tracker/.trow rules, so it needs no CSS of its own and rides here rather
+//      than forcing a v32. The "6:30 morning build" strings are corrected to
+//      07:30 in both modules, which is when CrystalMorning actually runs.
+//      NOT cached and NOT covered by this bump: worker/src/index.js gains
+//      /seen and a seen:brief write, which is server side and needs a wrangler
+//      deploy, not a cache version.
+const CACHE = "crystal-v31";
 
 const PRECACHE = [
   "./",

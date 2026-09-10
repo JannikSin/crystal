@@ -361,7 +361,8 @@ export function validateListen(p) {
 // ---------- career ----------
 // {built, spotlight?:{rank, name, facet, text}, roster:[same], cap 40,
 //  outreach?:{name, body, tickId}, signals?:{date, items[]}, aeroDated?,
-//  tracker?:[{to, org, ask, from, due, action, status, kind, sendNow?, id?}]}
+//  tracker?:[{to, org, ask, from, due, action, status, kind, sendNow?, id?}],
+//  applications?:[{applied, company, role, req, channel, resume, status, kind}]}
 function validateCompany(c, at) {
   if (!c || typeof c !== "object") return `${at} must be an object`;
   if (!isNum(c.rank)) return `${at}.rank must be a number`;
@@ -399,6 +400,17 @@ export function validateCareer(p) {
       return "signals.items must be an array of strings";
   }
   if (p.aeroDated !== undefined && !isStr(p.aeroDated)) return "aeroDated must be a string";
+  if (p.applications !== undefined) {
+    if (!isArr(p.applications)) return "applications must be an array";
+    for (let i = 0; i < p.applications.length; i++) {
+      const a = p.applications[i];
+      if (!a || typeof a !== "object") return `applications[${i}] must be an object`;
+      if (!isTxt(a.company)) return `applications[${i}].company required`;
+      if (!isTxt(a.role)) return `applications[${i}].role required`;
+      if (!isStr(a.applied) || !isStr(a.status))
+        return `applications[${i}].applied/status must be strings`;
+    }
+  }
   if (p.tracker !== undefined) {
     if (!isArr(p.tracker)) return "tracker must be an array";
     for (let i = 0; i < p.tracker.length; i++) {
