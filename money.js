@@ -314,6 +314,14 @@ function renderMoney(note, noHoldings) {
     const left = el("div", { class: "l" });
     left.appendChild(el("div", { class: "tk2" }, p.ticker + (q && q.stale ? " · stale" : "")));
     left.appendChild(el("div", { class: "val" }, val !== null ? fmtMoney(val) : "--"));
+    // The share price, against what he paid for one. Every other number on the
+    // row is scaled by his share count, and his ask (2026-09-08) was the price
+    // itself: "I remember what I bought it at", so the row does that comparison.
+    const bps = basisPerShare(p);
+    if (q && typeof q.price === "number") {
+      left.appendChild(el("div", { class: "pxline" },
+        fmtMoney(q.price) + (bps ? " · paid " + fmtMoney(bps) : "")));
+    }
     const dline = el("div", { class: "d" }, '<span class="delta">--</span>');
     left.appendChild(dline);
     const ltcg = ltcgBadge(p);
@@ -331,7 +339,6 @@ function renderMoney(note, noHoldings) {
     row.addEventListener("keydown", (e) => { if (e.key === "Enter") openDetail(); });
     rows.appendChild(row);
 
-    const bps = basisPerShare(p);
     const apply = (pct, amt, pts) => {
       dline.innerHTML = amt !== null ? deltaHtml(amt, pct) : '<span class="delta">--</span>';
       sp.innerHTML = sparkSvg(pts, dirClass(pct != null ? pct : amt), bps);
@@ -368,7 +375,12 @@ function renderMoney(note, noHoldings) {
   if (watch.length) {
     const w = el("div", { class: "watchstrip" });
     w.appendChild(el("span", { class: "eyebrow" }, "watchlist, nothing held"));
-    w.appendChild(el("span", { class: "wt" }, watch.map((p) => p.ticker).join(" · ")));
+    // A price is the only number that means anything for a name he does not
+    // hold, and the strip used to carry none.
+    w.appendChild(el("span", { class: "wt" }, watch.map((p) => {
+      const q = quotes[p.ticker];
+      return p.ticker + (q && typeof q.price === "number" ? " " + fmtMoney(q.price) : "");
+    }).join(" · ")));
     root.appendChild(w);
   }
 

@@ -474,6 +474,10 @@ label.cardtick{display:inline-flex;background:var(--soft);border:1px solid var(-
 .spark .tk2{font-family:var(--mono);font-size:.76rem;letter-spacing:.1em;color:var(--ink);font-weight:600}
 .spark .val{font-family:var(--serif);font-weight:600;font-size:1.16rem;
   font-variant-numeric:tabular-nums;line-height:1.25}
+/* Share price against his basis per share (2026-09-21): the row's other numbers
+   are all position-sized, and he asked for the one that is not. */
+.spark .pxline{font-family:var(--mono);font-size:.7rem;color:var(--dim);font-variant-numeric:tabular-nums;
+  letter-spacing:.02em}
 .spark .d{font-family:var(--mono);font-size:.74rem}
 .spark .ltcg{margin-top:5px}
 .spark .heldfor{font-family:var(--mono);font-size:.66rem;color:var(--dim);margin-top:3px;
