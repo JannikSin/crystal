@@ -195,6 +195,15 @@ function openAllowed(request, method, path) {
 
 const clip = (v, n) => String(v ?? "").slice(0, n);
 
+// app arrives on a keyless route and the drain turns it into a filename, so it
+// is a bare slug or nothing: "../../System/Protocol" became a write outside
+// Suggestions/ (hugoniot, 2026-09-24). route is display text, one line.
+const appSlug = (v) => String(v ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40);
+const oneLine = (v, n) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+// a typed note is a few hundred bytes; 64 KB is generous and stops a keyless
+// caller streaming megabytes into a note that is clipped to 8000 chars anyway
+const DESK_NOTE_CAP = 64 * 1024;
+
 const capFor = (path) => BODY_CAP[path] || MAX_BODY;
 
 // content-length is the cheap gate: refuse before a byte is read. Bodies that
@@ -538,8 +547,12 @@ export default {
       let at = "";
       let app = "";
       let route = "";
+      // too big is a 200 that stores nothing, not a 413: the contract above is
+      // no 4xx but 401, and suggest.js would retry a non-ok send forever
+      if (overCap(request, DESK_NOTE_CAP)) return json(200, { ok: false, dropped: "too large" });
       try {
         const raw = await request.text();
+        if (raw.length > DESK_NOTE_CAP) return json(200, { ok: false, dropped: "too large" });
         try {
           const body = JSON.parse(raw);
           text = String(body?.text ?? "").trim();
@@ -547,8 +560,8 @@ export default {
           // app + route from suggest.js (the per-app ✎ button): the drain's
           // suggestion lane files these against their app with NO model call,
           // so dropping them silently upgraded every app note to paid triage
-          app = clip(body?.app, 40);
-          route = clip(body?.route, 80);
+          app = appSlug(body?.app);
+          route = oneLine(body?.route, 80);
         } catch {
           text = String(raw || "").trim(); // not JSON: the words still count
         }
@@ -947,8 +960,8 @@ export default {
         const meta = { id, bytes: buf.byteLength, type: ct, at: d.toISOString() };
         // spoken app suggestions: the transcript inherits these so the drain's
         // suggestion lane can file it against its app like a typed ✎ note
-        const mApp = clip(url.searchParams.get("app"), 40);
-        const mRoute = clip(url.searchParams.get("route"), 80);
+        const mApp = appSlug(url.searchParams.get("app"));
+        const mRoute = oneLine(url.searchParams.get("route"), 80);
         if (mApp) meta.app = mApp;
         if (mRoute) meta.route = mRoute;
         // What the PHONE clocked, in seconds. The drain sets it beside the
