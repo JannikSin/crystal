@@ -188,7 +188,9 @@ function render(offlineNote, emptyDayNote) {
   // the stale-brief banner already exists to prevent.
   if (isToday || stale) {
     const fp = brief.front;
+    if (fp && fp.health) root.appendChild(healthSection(fp.health));
     if (fp && Array.isArray(fp.due)) root.appendChild(dueSection(fp.due));
+    if (fp && Array.isArray(fp.board) && fp.board.length) root.appendChild(taskBoard(fp.board));
     if (fp && Array.isArray(fp.tabs)) root.appendChild(tabStrip(fp.tabs));
   }
 
@@ -213,6 +215,76 @@ const TAB_ROUTE = {
   listen: "listen", shop: "shopping", library: "library",
 };
 
+// ---- the task board: tick it here, it closes in the vault ----
+// David, 2026-09-23: "i want to be able to check things off on there but i cant
+// it is just a read only and once i do finish a task how do i even tell it???"
+// Every Tasks.md row now arrives with a stable id (crystal-assistant/board.py,
+// hash of the row's bold title). A tick rides the ordinary tick pipe with kind
+// "board"; the hourly laptop sweep flips the row to [x] in Tasks.md and pushes
+// the board again, so the row is gone from every surface within the hour.
+// The due strip and the board share ids, so ticking either closes the row.
+//
+// Ticks are stored under the day they were TAKEN, and a row counts as done if
+// any of the last four days holds a done tick for it. A row ticked last night
+// that the laptop has not closed yet (lid shut) must not come back unticked
+// just because the date rolled over.
+const BOARD_DAYS = 4;
+function boardDone(id) {
+  for (let back = 0; back < BOARD_DAYS; back++) {
+    const t = localTicks(shiftIso(todayIso(), -back))[id];
+    if (t) return !!t.done;
+  }
+  return false;
+}
+function paintBoardRow(id, on) {
+  document.querySelectorAll("[data-tk]").forEach((n) => {
+    if (n.getAttribute("data-tk") !== id) return;
+    n.classList.toggle("done", on);
+    const box = n.querySelector("input");
+    if (box && box.checked !== on) box.checked = on;
+  });
+}
+function boardTick(r, section) {
+  const extra = { kind: "board", section: String(section || "Tasks").slice(0, 120),
+    label: String(r.text || "").slice(0, 200), target: r.id };
+  return tickControl(todayIso(), r.id, boardDone(r.id), extra, (on) => {
+    // An untick must also clear a done tick taken on an earlier day, or the
+    // laptop would still close the row from that older record.
+    if (!on) {
+      for (let back = 1; back < BOARD_DAYS; back++) {
+        const d = shiftIso(todayIso(), -back);
+        if (localTicks(d)[r.id]) setTick(d, r.id, false, extra);
+      }
+    }
+    paintBoardRow(r.id, on);
+  });
+}
+function whenText(r) {
+  if (!r.due) return "";
+  const n = Number(r.days || 0);
+  // "14 days over" is a fact he can act on; a bare red dot is not.
+  if (n < 0) return Math.abs(n) + (Math.abs(n) === 1 ? " day over" : " days over");
+  if (n === 0) return "today";
+  if (n === 1) return "tomorrow";
+  return "in " + n + " days";
+}
+function taskRow(r, section) {
+  const over = r.due && Number(r.days || 0) < 0;
+  const li = el("li", { class: "due tickrow" + (over ? " over" : "") });
+  li.setAttribute("data-tk", r.id);
+  if (boardDone(r.id)) li.classList.add("done");
+  li.appendChild(boardTick(r, section));
+  const col = el("div", { class: "duecol" });
+  col.appendChild(el("span", { class: "duetext" }, md(String(r.text || ""))));
+  const meta = el("span", { class: "duemeta" });
+  const w = whenText(r);
+  if (w) meta.appendChild(el("span", { class: "duewhen" }, w));
+  if (r.owner) meta.appendChild(el("span", { class: "dueowner" }, String(r.owner)));
+  if (meta.childNodes.length) col.appendChild(meta);
+  li.appendChild(col);
+  return li;
+}
+
 function dueSection(rows) {
   const sec = el("section", { class: "front-due" });
   sec.appendChild(el("h2", {}, "Due today"));
@@ -222,18 +294,65 @@ function dueSection(rows) {
   }
   const ul = el("ul", { class: "duelist" });
   rows.forEach((r) => {
+    // Rows from Tasks.md carry a tk- id and get a box. A due row from any other
+    // note is still shown, read-only, because there is nowhere to write it back.
+    if (/^tk-/.test(String(r.id || ""))) { ul.appendChild(taskRow(r, "Due today")); return; }
     const li = el("li", { class: (r.days || 0) < 0 ? "due over" : "due" });
     li.appendChild(el("span", { class: "duetext" }, md(String(r.text || ""))));
     const meta = el("span", { class: "duemeta" });
-    const n = Number(r.days || 0);
-    // "14 days over" is a fact he can act on; a bare red dot is not.
-    meta.appendChild(el("span", { class: "duewhen" },
-      n < 0 ? Math.abs(n) + (Math.abs(n) === 1 ? " day over" : " days over") : "today"));
+    meta.appendChild(el("span", { class: "duewhen" }, whenText(r) || "today"));
     if (r.owner) meta.appendChild(el("span", { class: "dueowner" }, String(r.owner)));
     li.appendChild(meta);
     ul.appendChild(li);
   });
   sec.appendChild(ul);
+  return sec;
+}
+
+// The whole open board, one fold per Tasks.md section. The first fold (NOW)
+// starts open; after that each fold remembers how he left it, by title.
+function taskBoard(sections) {
+  const sec = el("section", { class: "front-due front-board" });
+  const total = sections.reduce((n, s) => n + (s.rows || []).length, 0);
+  sec.appendChild(el("h2", {}, "Task board · " + total + " open"));
+  const saved = lsGet("crystal.boardOpen", null) || {};
+  sections.forEach((s, i) => {
+    const det = el("details", { class: "boardfold" });
+    det.open = s.title in saved ? !!saved[s.title] : i === 0;
+    const sum = el("summary", {});
+    sum.appendChild(el("span", { class: "foldtitle" }, md(String(s.title || "Tasks"))));
+    sum.appendChild(el("span", { class: "foldn" }, String((s.rows || []).length)));
+    det.appendChild(sum);
+    det.addEventListener("toggle", () => {
+      const cur = lsGet("crystal.boardOpen", null) || {};
+      cur[s.title] = det.open;
+      lsSet("crystal.boardOpen", cur);
+    });
+    const ul = el("ul", { class: "duelist" });
+    (s.rows || []).forEach((r) => ul.appendChild(taskRow(r, s.title)));
+    det.appendChild(ul);
+    sec.appendChild(det);
+  });
+  sec.appendChild(el("p", { class: "boardnote" },
+    "Tick a row when it is done. The laptop closes it in Tasks.md within the hour."));
+  return sec;
+}
+
+// The daily audit's verdict (crystal-assistant/crystal_audit.py): one line,
+// the findings one tap away, so a stale tab is said out loud instead of simply
+// looking abandoned.
+function healthSection(h) {
+  const sec = el("section", { class: "front-health" });
+  const det = el("details", {});
+  const sum = el("summary", {});
+  sum.appendChild(el("span", { class: "hl" }, md(String(h.line || ""))));
+  det.appendChild(sum);
+  if (Array.isArray(h.items) && h.items.length) {
+    const ul = el("ul", {});
+    h.items.forEach((t) => ul.appendChild(el("li", {}, md(String(t)))));
+    det.appendChild(ul);
+  }
+  sec.appendChild(det);
   return sec;
 }
 

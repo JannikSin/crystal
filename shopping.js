@@ -14,7 +14,9 @@
 
 import {
   root, el, md, fmtMoney, lsGet, lsSet, appFooter, emptyState, loadCached, isTab, CHECK_SVG,
+  todayIso,
 } from "./core.js";
+import { setTick } from "./sync.js";
 
 // Deliberately NOT "crystal.shopping.got": core.js clears cached payloads by
 // PREFIX on a key change, so a cart stored under the payload's own prefix would
@@ -45,10 +47,26 @@ function idOf(item) {
 }
 
 function got() { return lsGet(GOT_KEY, {}) || {}; }
-function setGot(id, on) {
+
+// The tick id has to fit the Worker's ID_RE (40 chars), and a product name
+// does not, so the id is a short hash and the full name rides as the target.
+function tickId(id) {
+  let h = 5381;
+  for (let i = 0; i < id.length; i++) h = ((h * 33) ^ id.charCodeAt(i)) >>> 0;
+  return "sh-" + h.toString(36);
+}
+
+// David, 2026-09-23: "that would get rid of things on the shop tab i have
+// already confirmed bought". Until today this tick lived only on the phone, so
+// the vault never heard, and the next push put the row straight back. Now it
+// also rides the tick pipe with kind "shop"; the hourly laptop sweep marks the
+// row [x] in Life/Shopping-List.md, and it leaves the buy list on the next push.
+function setGot(id, on, name) {
   const g = got();
-  if (on) g[id] = true; else delete g[id];
+  if (on) g[id] = { at: todayIso() }; else delete g[id];
   lsSet(GOT_KEY, g);
+  setTick(todayIso(), tickId(id), on,
+    { kind: "shop", section: "Shop", label: String(name || id).slice(0, 200), target: id.slice(0, 120) });
 }
 
 function render(data, note, empty) {
@@ -452,7 +470,7 @@ function itemRow(it, status, rows) {
   // Two separate actions on one row means two separate controls.
   const tick = el("button", {
     type: "button", class: "tk", "aria-pressed": isGot ? "true" : "false",
-    "aria-label": "In the cart: " + it.name,
+    "aria-label": "Got it: " + it.name,
   }, CHECK_SVG);
 
   const row = el("button", { type: "button", class: "hd", "aria-expanded": "false" });
@@ -485,7 +503,7 @@ function itemRow(it, status, rows) {
   }
   tick.addEventListener("click", () => {
     isGot = !isGot;
-    setGot(id, isGot);
+    setGot(id, isGot, it.name);
     paintGot();
     api.onChange();
   });

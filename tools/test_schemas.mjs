@@ -447,4 +447,24 @@ assert.match(
   /amount must be a number/,
 );
 
+// ---- front.board + front.health (2026-09-23) ----
+// Validated against the REAL dry-run brief when the laptop left one in the
+// scratch path, else a minimal fixture; both must pass, and each break names
+// its field.
+{
+  const base = { v: 2, date: "2026-09-23", day: "Wednesday", built: "2026-09-23T07:30:00-04:00",
+    timeline: [], cards: [] };
+  const good = { ...base, front: { due: [], tabs: [],
+    board: [{ title: "NOW", rows: [{ id: "tk-7d71c5e7d1", text: "ME 274 set", due: "2026-09-23", days: 0 },
+                                   { id: "tk-04df9a59df", text: "Get the name", owner: "David + Claude" }] }],
+    health: { line: "Two tabs are stale", items: ["Shop: 21 days"] } } };
+  assert.equal(validateBriefV2(good), null);
+  const bad = (f) => validateBriefV2({ ...base, front: { due: [], tabs: [], ...f } });
+  assert.match(bad({ board: [{ title: "x", rows: [{ id: "BAD ID", text: "t" }] }] }), /board\[0\]\.rows\[0\]\.id/);
+  assert.match(bad({ board: [{ title: "x", rows: [{ id: "tk-a", text: "t", due: "Thursday" }] }] }), /due must be YYYY-MM-DD/);
+  assert.match(bad({ board: "no" }), /front.board must be an array/);
+  assert.match(bad({ health: { items: [] } }), /front.health.line required/);
+  assert.match(bad({ health: { line: "x", items: [1] } }), /items must be strings/);
+}
+
 console.log("test_schemas: all assertions passed");

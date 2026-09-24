@@ -72,7 +72,7 @@
 //      and the watchlist strip shows a price per name (Desk ticket
 //      d-20260908, David 2026-09-08); app.css gains .spark .pxline, so the
 //      pair lands together.
-const CACHE = "crystal-v32";
+const CACHE = "crystal-v33";
 
 const PRECACHE = [
   "./",

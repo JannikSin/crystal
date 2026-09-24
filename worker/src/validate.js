@@ -252,6 +252,39 @@ export function validateBriefV2(p) {
       if (t.empty !== undefined && typeof t.empty !== "boolean")
         return `front.tabs[${i}].empty must be a boolean`;
     }
+    // 2026-09-23 (chapman): the whole open task board, tickable, and the daily
+    // audit's health line. Both optional. Caps mirror crystal-assistant/board.py.
+    if (f.board !== undefined) {
+      if (!isArr(f.board)) return "front.board must be an array";
+      if (f.board.length > 16) return "front.board: more than 16 sections";
+      let rows = 0;
+      for (let i = 0; i < f.board.length; i++) {
+        const s = f.board[i], at = `front.board[${i}]`;
+        if (!s || typeof s !== "object") return `${at} must be an object`;
+        if (!isTxt(s.title)) return `${at}.title required`;
+        if (!isArr(s.rows)) return `${at}.rows must be an array`;
+        for (let j = 0; j < s.rows.length; j++) {
+          const r = s.rows[j], rat = `${at}.rows[${j}]`;
+          if (!r || typeof r !== "object") return `${rat} must be an object`;
+          if (!ID_RE.test(r.id || "")) return `${rat}.id must match ${ID_RE}`;
+          if (!isTxt(r.text)) return `${rat}.text required`;
+          if (r.due !== undefined && !DATE_RE.test(r.due)) return `${rat}.due must be YYYY-MM-DD`;
+          if (r.days !== undefined && typeof r.days !== "number") return `${rat}.days must be a number`;
+          if (r.owner !== undefined && !isStr(r.owner)) return `${rat}.owner must be a string`;
+        }
+        rows += s.rows.length;
+      }
+      if (rows > 90) return "front.board: more than 90 open rows";
+    }
+    if (f.health !== undefined) {
+      const h = f.health;
+      if (!h || typeof h !== "object") return "front.health must be an object";
+      if (!isTxt(h.line)) return "front.health.line required";
+      if (h.items !== undefined) {
+        if (!isArr(h.items) || h.items.length > 8) return "front.health.items: an array of at most 8";
+        if (!h.items.every(isStr)) return "front.health.items must be strings";
+      }
+    }
   }
   if (!isArr(p.timeline)) return "timeline must be an array";
   if (p.timeline.length > 40) return "timeline: more than 40 items, that is not a day";

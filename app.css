@@ -1077,3 +1077,31 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
   color:var(--accent-ink);font-weight:600}
 .tabtop{font-family:var(--serif);font-size:.97rem;line-height:1.34;color:var(--ink)}
 .tabstrip li.empty .tabtop{color:var(--faint);font-style:italic}
+
+/* ------------------------------------------- task board + health (09-23) -- */
+/* The due strip and the board rows carry a box now (David, 2026-09-23: "i want
+   to be able to check things off"). Same row type in both lists. */
+.duelist li.tickrow{flex-direction:row;align-items:flex-start;gap:11px}
+.duelist li.tickrow label.tk{margin-top:1px}
+.duecol{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.duelist li.done .duetext{color:var(--faint);text-decoration:line-through;
+  text-decoration-color:var(--edge)}
+.duelist li.done .duewhen{opacity:.5}
+.front-board .boardfold{border-bottom:1px solid var(--hairline)}
+.front-board .boardfold:last-of-type{border-bottom:none}
+.front-board summary{display:flex;align-items:baseline;gap:10px;cursor:pointer;
+  padding:9px 0;list-style:none;font-family:var(--serif);font-size:.98rem;color:var(--ink)}
+.front-board summary::-webkit-details-marker{display:none}
+.front-board summary::before{content:"›";color:var(--faint);display:inline-block;
+  transition:transform .15s ease;width:.7em}
+.front-board details[open]>summary::before{transform:rotate(90deg)}
+.front-board .foldtitle{flex:1;min-width:0}
+.front-board .foldn{font-family:var(--mono);font-size:.7rem;color:var(--faint)}
+.front-board .duelist{padding-left:2px}
+.boardnote{margin:8px 0 0;font-size:.76rem;color:var(--faint)}
+.front-health{margin:14px 0 0;padding:9px 13px;border-radius:11px;
+  background:var(--soft);border:1px solid var(--soft-edge)}
+.front-health summary{cursor:pointer;list-style:none;font-size:.86rem;color:var(--accent-ink)}
+.front-health summary::-webkit-details-marker{display:none}
+.front-health ul{margin:8px 0 2px;padding-left:18px;font-size:.84rem;color:var(--ink)}
+.front-health li{margin:3px 0}
