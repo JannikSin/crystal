@@ -200,9 +200,15 @@ const clip = (v, n) => String(v ?? "").slice(0, n);
 // Suggestions/ (hugoniot, 2026-09-24). route is display text, one line.
 const appSlug = (v) => String(v ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40);
 const oneLine = (v, n) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
-// a typed note is a few hundred bytes; 64 KB is generous and stops a keyless
-// caller streaming megabytes into a note that is clipped to 8000 chars anyway
+// a typed note is a few hundred bytes; 64 KB (about 10,000 words, an hour of
+// speech) is generous for a keyless caller. A keyed post is the laptop drain
+// re-posting a voice transcript, and David ruled no cap on a long voice note
+// (2026-09-26), so it gets 1 MB and the text is never clipped below the cap.
 const DESK_NOTE_CAP = 64 * 1024;
+const DESK_NOTE_CAP_KEYED = 1024 * 1024;
+// who sent it (David, 2026-09-26: "want each note to know who sent it"). A
+// display name typed once in the ✎ panel, one line, never a filename.
+const senderName = (v) => oneLine(String(v ?? "").replace(/[\[\]`*<>|#]/g, ""), 40);
 
 const capFor = (path) => BODY_CAP[path] || MAX_BODY;
 
@@ -547,12 +553,14 @@ export default {
       let at = "";
       let app = "";
       let route = "";
+      let from = "";
+      const cap = who === "open" ? DESK_NOTE_CAP : DESK_NOTE_CAP_KEYED;
       // too big is a 200 that stores nothing, not a 413: the contract above is
       // no 4xx but 401, and suggest.js would retry a non-ok send forever
-      if (overCap(request, DESK_NOTE_CAP)) return json(200, { ok: false, dropped: "too large" });
+      if (overCap(request, cap)) return json(200, { ok: false, dropped: "too large" });
       try {
         const raw = await request.text();
-        if (raw.length > DESK_NOTE_CAP) return json(200, { ok: false, dropped: "too large" });
+        if (raw.length > cap) return json(200, { ok: false, dropped: "too large" });
         try {
           const body = JSON.parse(raw);
           text = String(body?.text ?? "").trim();
@@ -562,6 +570,7 @@ export default {
           // so dropping them silently upgraded every app note to paid triage
           app = appSlug(body?.app);
           route = oneLine(body?.route, 80);
+          from = senderName(body?.from);
         } catch {
           text = String(raw || "").trim(); // not JSON: the words still count
         }
@@ -572,9 +581,10 @@ export default {
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
       const id = `d-${d.toISOString().slice(0, 10).replace(/-/g, "")}-${rand}`;
-      const note = { id, text: clip(text, 8000), at: at || d.toISOString(), via: who };
+      const note = { id, text: clip(text, cap), at: at || d.toISOString(), via: who };
       if (app) note.app = app;
       if (route) note.route = route;
+      if (from) note.from = from;
       // 30-day backstop TTL: the drain normally consumes within the hour, but
       // if it dies (the standing wire-automation failure class) raw notes must
       // not accumulate in KV forever behind one key (Lawyer). The doctor
@@ -957,13 +967,18 @@ export default {
           .map((b) => b.toString(16).padStart(2, "0"))
           .join("");
         const id = `da-${d.toISOString().slice(0, 10).replace(/-/g, "")}-${rand}`;
-        const meta = { id, bytes: buf.byteLength, type: ct, at: d.toISOString() };
+        // via rides along because the drain re-posts the transcript with the
+        // laptop key, which would otherwise turn a guest's recording into one
+        // that reads as David's own
+        const meta = { id, bytes: buf.byteLength, type: ct, at: d.toISOString(), via: who };
         // spoken app suggestions: the transcript inherits these so the drain's
         // suggestion lane can file it against its app like a typed ✎ note
         const mApp = appSlug(url.searchParams.get("app"));
         const mRoute = oneLine(url.searchParams.get("route"), 80);
         if (mApp) meta.app = mApp;
         if (mRoute) meta.route = mRoute;
+        const mFrom = senderName(url.searchParams.get("from"));
+        if (mFrom) meta.from = mFrom;
         // What the PHONE clocked, in seconds. The drain sets it beside the
         // duration the transcriber measured; a large gap is a truncated
         // upload, which is the shape of the "it cuts out" reports. Bounded so
