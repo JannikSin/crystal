@@ -43,6 +43,13 @@
 //   POST /career              laptop pushes roster + outreach (validated)
 //   GET  /career              the roster
 //
+// Listen episodes (2026-10-05, gopher):
+//   POST   /episode?id=   laptop pushes one MP3, audio/mpeg bytes, metadata in
+//                        the x-episode-meta header (JSON, meta.date required)
+//   GET    /episode       the index {items:[meta]}, newest first
+//   GET    /episode?id=   the MP3 bytes. The phone may read both GETs.
+//   DELETE /episode?id=   laptop drops one
+//
 // Desk additions (the idea inbox; Crystal System/Desk.md):
 //   POST /desk               phone or laptop drops a note; one KV key per note
 //                            (desk:<id>); never 4xx except 401
@@ -109,6 +116,8 @@ const BODY_CAP = {
   "/answer": 20 * 1024 * 1024,
   "/deskaudio": 20 * 1024 * 1024,
   "/library": 4 * 1024 * 1024,
+  // the daily Listen episode, built at 32 kbps mono: 25 minutes is about 6 MB
+  "/episode": 20 * 1024 * 1024,
 };
 const BLOB_TTL = 14 * 24 * 3600;
 const DESK_TTL = 30 * 24 * 3600; // backstop for un-drained desk: / deskapprove: keys
@@ -212,6 +221,28 @@ const senderName = (v) => oneLine(String(v ?? "").replace(/[\[\]`*<>|#]/g, ""), 
 
 const capFor = (path) => BODY_CAP[path] || MAX_BODY;
 
+// The episode's metadata rides in a header beside the raw MP3 so the bytes never
+// pass through JSON. Whitelisted fields only, every string one line and clipped;
+// anything else in the header is dropped, not stored.
+function episodeMeta(m) {
+  if (!m || typeof m !== "object" || Array.isArray(m)) throw new Error("meta");
+  const chapters = (Array.isArray(m.chapters) ? m.chapters : []).slice(0, 24)
+    .filter((c) => c && Number.isFinite(Number(c.t)))
+    .map((c) => ({ t: Math.max(0, Math.round(Number(c.t))), title: oneLine(c.title, 80) }));
+  const sources = (Array.isArray(m.sources) ? m.sources : []).slice(0, 12)
+    .map((s) => ({ name: oneLine(s && s.name, 60), asof: oneLine(s && s.asof, 40) }));
+  return {
+    date: oneLine(m.date, 10),
+    kind: oneLine(m.kind, 20),
+    title: oneLine(m.title, 120),
+    built: oneLine(m.built, 40),
+    asof: oneLine(m.asof, 160),
+    seconds: Math.max(0, Math.round(Number(m.seconds) || 0)),
+    chapters,
+    sources,
+  };
+}
+
 // content-length is the cheap gate: refuse before a byte is read. Bodies that
 // arrive without one (chunked) still hit the post-read backstop below.
 function overCap(request, cap) {
@@ -257,6 +288,15 @@ async function putDated(env, prefix, date, raw) {
     latestDate = JSON.parse((await env.STORE.get(`${prefix}:latest`)) || "{}").date || "";
   } catch {}
   if (date >= latestDate) await env.STORE.put(`${prefix}:latest`, raw);
+}
+
+async function episodeIndex(env) {
+  try {
+    const v = JSON.parse((await env.STORE.get("episodeidx")) || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
 }
 
 async function getDated(env, prefix, qdate) {
@@ -949,6 +989,60 @@ export default {
         const items = (await answerIndex(env, qdate)).filter((i) => i && i.qid !== qid);
         await putAnswerIndex(env, qdate, items);
         return json(200, { ok: true, date: qdate, qid, remaining: items.length });
+      }
+    }
+
+    // ---------- episode: audio files for the Listen tab ----------
+    // David, 2026-10-05/06: audio he plays on a walk, listed in Listen so he can
+    // "just click on and listen to." The daily episode is built minutes before
+    // delivery from live state (his rule: "made after our last conversation")
+    // and may be rebuilt; a push with the same id overwrites it, and meta.built
+    // is the version the phone compares. Clips of other people's podcasts ride
+    // inside these MP3s, so the bytes stay behind the key with a 14 day TTL,
+    // never a public URL or feed.
+    if (path === "/episode") {
+      const id = url.searchParams.get("id") || "";
+      if (id && !ID_RE.test(id)) return json(400, { error: "bad id" });
+
+      if (method === "POST") {
+        if (!id) return json(400, { error: "id required" });
+        let meta;
+        try {
+          meta = episodeMeta(JSON.parse(request.headers.get("x-episode-meta") || "{}"));
+        } catch {
+          return json(400, { error: "bad x-episode-meta" });
+        }
+        if (!DATE_RE.test(meta.date)) return json(400, { error: "meta.date required (YYYY-MM-DD)" });
+        const { buf, err } = await readBlob(request, capFor(path), ["audio/mpeg"]);
+        if (err) return err;
+        meta = { ...meta, id, bytes: buf.byteLength, at: new Date().toISOString() };
+        await env.STORE.put(`episode:${id}`, buf, { expirationTtl: BLOB_TTL });
+        const items = (await episodeIndex(env)).filter((i) => i && i.id !== id);
+        items.push(meta);
+        // newest date first, then newest build; the blobs expire on their own,
+        // so the index only keeps what can still be played
+        items.sort((x, y) => (y.date + y.at).localeCompare(x.date + x.at));
+        await env.STORE.put("episodeidx", JSON.stringify(items.slice(0, 20)));
+        return json(200, { ok: true, id, bytes: buf.byteLength, built: meta.built });
+      }
+
+      if (method === "GET" && !id) {
+        const cutoff = new Date(Date.now() - BLOB_TTL * 1000).toISOString();
+        return json(200, { items: (await episodeIndex(env)).filter((i) => i && i.at > cutoff) });
+      }
+
+      if (method === "GET") {
+        const buf = await env.STORE.get(`episode:${id}`, "arrayBuffer");
+        if (!buf) return json(404, { error: "no episode with that id" });
+        return bytes200(buf, "audio/mpeg");
+      }
+
+      if (method === "DELETE") {
+        if (!id) return json(400, { error: "id required" });
+        await env.STORE.delete(`episode:${id}`);
+        const items = (await episodeIndex(env)).filter((i) => i && i.id !== id);
+        await env.STORE.put("episodeidx", JSON.stringify(items));
+        return json(200, { ok: true, id, remaining: items.length });
       }
     }
 

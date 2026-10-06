@@ -11,6 +11,7 @@ import {
 } from "./core.js";
 import { localTicks, tickControl, queueCapture } from "./sync.js";
 import { wakeButton } from "./today.js";
+import { episodeCard } from "./episode.js";
 
 const SECTION = "🎧 Listen";
 const TAG_EMOJI = {
@@ -65,6 +66,9 @@ function render(data, note, empty) {
   root.appendChild(sw);
 
   if (mode === "music") { musicMode(data); root.appendChild(appFooter(reload)); return; }
+
+  // the daily walk episode sits above the queue: it is the one thing built for today
+  root.appendChild(episodeCard());
 
   const date = todayIso();
   const local = localTicks(date);

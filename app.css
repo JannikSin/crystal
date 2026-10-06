@@ -1105,3 +1105,20 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
 .front-health summary::-webkit-details-marker{display:none}
 .front-health ul{margin:8px 0 2px;padding-left:18px;font-size:.84rem;color:var(--ink)}
 .front-health li{margin:3px 0}
+
+/* ---------- listen: the audio shelf (v34) ---------- */
+.episode{background:var(--card);border:1px solid var(--edge);border-radius:18px;padding:12px 14px;margin:0 0 16px}
+.elist{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.erow{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;padding:12px;border-radius:14px;border:1px solid var(--edge);background:transparent;color:inherit;font:inherit}
+.erow.on{outline:2px solid currentColor}
+.eplayglyph{font-size:1.3em;line-height:1.2;min-width:1.2em}
+.etext{display:flex;flex-direction:column;gap:2px}
+.etext small{opacity:.75}
+.etext .stale{opacity:1;font-weight:600}
+.eplayer{margin-top:10px}
+.eplayer audio{width:100%;margin:6px 0 4px}
+.erates{display:flex;gap:6px;margin:6px 0}
+.erates button{flex:1;padding:8px 0;border-radius:10px}
+.erates button[aria-pressed="true"]{font-weight:700;outline:2px solid currentColor}
+.echapters{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.echapters button{text-align:left;padding:8px 10px;border-radius:10px;white-space:pre}

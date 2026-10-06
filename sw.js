@@ -72,7 +72,14 @@
 //      and the watchlist strip shows a price per name (Desk ticket
 //      d-20260908, David 2026-09-08); app.css gains .spark .pxline, so the
 //      pair lands together.
-const CACHE = "crystal-v33";
+// v34: the Listen audio shelf (gopher, David 2026-10-05/06). New module
+//      episode.js (precached below), listen.js mounts it above the queue,
+//      app.css gains .episode/.erow/.eplayer/.erates/.echapters, and index.html's CSP
+//      gains media-src blob: so the player can play the downloaded MP3. All
+//      four land together. NOT covered by this bump: worker/src/index.js gains
+//      /episode, which needs a wrangler deploy BEFORE this ships, or the shelf
+//      just says there is no audio yet.
+const CACHE = "crystal-v34";
 
 const PRECACHE = [
   "./",
@@ -87,6 +94,7 @@ const PRECACHE = [
   "./career.js",
   "./shopping.js",
   "./listen.js",
+  "./episode.js",
   "./library.js",
   "./desk.js",
   "./app.js",
