@@ -256,7 +256,7 @@ export function validateBriefV2(p) {
     // audit's health line. Both optional. Caps mirror crystal-assistant/board.py.
     if (f.board !== undefined) {
       if (!isArr(f.board)) return "front.board must be an array";
-      if (f.board.length > 16) return "front.board: more than 16 sections";
+      if (f.board.length > 32) return "front.board: more than 32 sections";
       let rows = 0;
       for (let i = 0; i < f.board.length; i++) {
         const s = f.board[i], at = `front.board[${i}]`;
@@ -274,7 +274,7 @@ export function validateBriefV2(p) {
         }
         rows += s.rows.length;
       }
-      if (rows > 90) return "front.board: more than 90 open rows";
+      if (rows > 400) return "front.board: more than 400 open rows";
     }
     if (f.health !== undefined) {
       const h = f.health;

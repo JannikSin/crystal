@@ -465,6 +465,13 @@ assert.match(
   assert.match(bad({ board: "no" }), /front.board must be an array/);
   assert.match(bad({ health: { items: [] } }), /front.health.line required/);
   assert.match(bad({ health: { line: "x", items: [1] } }), /items must be strings/);
+  // 2026-10-11 (pierogi): the whole board, 13 sections / 232 rows on the day
+  // the 16/90 caps were found cutting it to 6 sections, must pass.
+  const big = (nSec, nRows) => Array.from({ length: nSec }, (_, i) => ({ title: "S" + i,
+    rows: Array.from({ length: nRows }, (_, j) => ({ id: `tk-${i}x${j}`, text: "row" })) }));
+  assert.equal(bad({ board: big(13, 18) }), null);
+  assert.match(bad({ board: big(33, 1) }), /more than 32 sections/);
+  assert.match(bad({ board: big(20, 21) }), /more than 400 open rows/);
 }
 
 console.log("test_schemas: all assertions passed");
