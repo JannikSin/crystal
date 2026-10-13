@@ -50,6 +50,13 @@
 //   GET    /episode?id=   the MP3 bytes. The phone may read both GETs.
 //   DELETE /episode?id=   laptop drops one
 //
+// Files (2026-10-10, standby): PDFs and images David reads on the phone.
+//   POST   /file?id=      laptop pushes one file, raw bytes, metadata in the
+//                        x-file-meta header (JSON, meta.title required)
+//   GET    /file          the index {items:[meta]}, newest first
+//   GET    /file?id=      the bytes. The phone may read both GETs.
+//   DELETE /file?id=      laptop drops one
+//
 // Desk additions (the idea inbox; Crystal System/Desk.md):
 //   POST /desk               phone or laptop drops a note; one KV key per note
 //                            (desk:<id>); never 4xx except 401
@@ -118,8 +125,12 @@ const BODY_CAP = {
   "/library": 4 * 1024 * 1024,
   // the daily Listen episode, built at 32 kbps mono: 25 minutes is about 6 MB
   "/episode": 20 * 1024 * 1024,
+  // a phone deliverable: a typeset PDF is usually under 1 MB, a scanned one a few MB
+  "/file": 20 * 1024 * 1024,
 };
 const BLOB_TTL = 14 * 24 * 3600;
+const FILE_TTL = 30 * 24 * 3600;
+const FILE_TYPES = ["application/pdf", "image/png", "image/jpeg"];
 const DESK_TTL = 30 * 24 * 3600; // backstop for un-drained desk: / deskapprove: keys
 const AUDIO_TYPES = ["audio/mp4", "audio/m4a", "audio/aac", "audio/webm"];
 const QUOTE_TTL = 15 * 60 * 1000;
@@ -291,6 +302,26 @@ async function putDated(env, prefix, date, raw, ttl = 0) {
     latestDate = JSON.parse((await env.STORE.get(`${prefix}:latest`)) || "{}").date || "";
   } catch {}
   if (date >= latestDate) await env.STORE.put(`${prefix}:latest`, raw);
+}
+
+// Same shape as episodeMeta: whitelisted, one line, clipped.
+function fileMeta(m) {
+  if (!m || typeof m !== "object" || Array.isArray(m)) throw new Error("meta");
+  return {
+    title: oneLine(m.title, 120),
+    name: oneLine(m.name, 120).replace(/[\\/:*?"<>|]/g, "_"),
+    note: oneLine(m.note, 200),
+    made: oneLine(m.made, 40),
+  };
+}
+
+async function fileIndex(env) {
+  try {
+    const v = JSON.parse((await env.STORE.get("fileidx")) || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
 }
 
 async function episodeIndex(env) {
@@ -1045,6 +1076,57 @@ export default {
         await env.STORE.delete(`episode:${id}`);
         const items = (await episodeIndex(env)).filter((i) => i && i.id !== id);
         await env.STORE.put("episodeidx", JSON.stringify(items));
+        return json(200, { ok: true, id, remaining: items.length });
+      }
+    }
+
+    // ---------- file: PDFs and images for the Library tab ----------
+    // David, 2026-10-10: ntfy attachments expire in hours and the Drive folder
+    // was a detour ("can Crystal not do it?"). A session pushes a deliverable
+    // with push_file.py; the phone lists it at the top of LIBRARY, caches the
+    // bytes for no-signal reading, and opens it in the iPhone viewer. Behind
+    // the key like everything else, 30 day TTL, the index keeps the newest 50.
+    if (path === "/file") {
+      const id = url.searchParams.get("id") || "";
+      if (id && !ID_RE.test(id)) return json(400, { error: "bad id" });
+
+      if (method === "POST") {
+        if (!id) return json(400, { error: "id required" });
+        let meta;
+        try {
+          meta = fileMeta(JSON.parse(request.headers.get("x-file-meta") || "{}"));
+        } catch {
+          return json(400, { error: "bad x-file-meta" });
+        }
+        if (!meta.title) return json(400, { error: "meta.title required" });
+        const { buf, ct, err } = await readBlob(request, capFor(path), FILE_TYPES);
+        if (err) return err;
+        meta = { ...meta, id, type: ct, bytes: buf.byteLength, at: new Date().toISOString() };
+        await env.STORE.put(`file:${id}`, buf, { expirationTtl: FILE_TTL });
+        const items = (await fileIndex(env)).filter((i) => i && i.id !== id);
+        items.unshift(meta);
+        items.sort((x, y) => y.at.localeCompare(x.at));
+        await env.STORE.put("fileidx", JSON.stringify(items.slice(0, 50)));
+        return json(200, { ok: true, id, bytes: buf.byteLength });
+      }
+
+      if (method === "GET" && !id) {
+        const cutoff = new Date(Date.now() - FILE_TTL * 1000).toISOString();
+        return json(200, { items: (await fileIndex(env)).filter((i) => i && i.at > cutoff) });
+      }
+
+      if (method === "GET") {
+        const item = (await fileIndex(env)).find((i) => i && i.id === id);
+        const buf = await env.STORE.get(`file:${id}`, "arrayBuffer");
+        if (!buf || !item) return json(404, { error: "no file with that id" });
+        return bytes200(buf, item.type);
+      }
+
+      if (method === "DELETE") {
+        if (!id) return json(400, { error: "id required" });
+        await env.STORE.delete(`file:${id}`);
+        const items = (await fileIndex(env)).filter((i) => i && i.id !== id);
+        await env.STORE.put("fileidx", JSON.stringify(items));
         return json(200, { ok: true, id, remaining: items.length });
       }
     }
