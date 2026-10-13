@@ -7,7 +7,6 @@ import { flush, flushUploads, queueDesk, uploadEnqueue } from "./sync.js";
 import * as today from "./today.js";
 import * as news from "./news.js";
 import * as money from "./money.js";
-import * as career from "./career.js";
 import * as listen from "./listen.js";
 import * as library from "./library.js";
 import * as shopping from "./shopping.js";
@@ -16,7 +15,13 @@ import * as shopping from "./shopping.js";
 // side on every tab, and the board renders at the foot of Today. An old
 // #/desk hash falls through the unknown-tab guard onto Today. The Markets
 // tab followed the same day: its digest lives at the foot of Money now.
-const ROUTES = { today, news, money, career, shopping, listen, library };
+// Career moved out to Whiteboard on 2026-10-13 (curvature): David never opened
+// the tab and used the interview drill daily. career.js stays in the tree, and
+// precached, until the next sw.js bump drops it.
+const ROUTES = { today, news, money, shopping, listen, library };
+// the Career tab's cached payloads (recruiter names, application statuses) have
+// no reader any more; drop them from this phone
+try { localStorage.removeItem("crystal.career"); localStorage.removeItem("crystal.reps"); } catch (e) {}
 
 function route() {
   if (!key()) { keyScreen(""); return; }

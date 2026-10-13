@@ -1,11 +1,12 @@
-// today.js: TODAY, "the timeline".
+// today.js: TODAY, a priority list, not slots.
 //
-// The day runs down a rail on the left edge. Five slot markers: four clock
-// bands (dawn, morning, evening, night) and the whenever pool in the middle,
-// items hanging off the rail as bare labels with a checkbox, and a now-line
-// placed by interpolating the clock inside its band.
-// Tier is expressed ONLY as the colour of the dot. No descriptions on the
-// surface: detail is one tap away, on the items that have any.
+// David, 2026-10-13: "Priority list, not slots, I agree." (and 10/7: "i live by
+// priority order of what needs to get done ... only time blocks are classes").
+// Top to bottom: Fixed today (calendar classes, meetings, exams and lights out,
+// the only clocks on the screen), the day's news episode, Next up (one ordered
+// list, order.js), the daily floor, the rest of today folded, then the board.
+// The five slot bands and the now-line that ran here from 2026-08 are gone; the
+// payload still carries each item's `t`, and nothing here reads it.
 
 import {
   root, api, el, md, blockMd, lsGet, lsSet, todayIso, shiftIso, fmtBuilt,
@@ -17,23 +18,8 @@ import {
 } from "./sync.js";
 import { computeReward } from "./reward.js";
 import { boardSection } from "./desk.js";
+import { nextList, anchorsFor, todaysNews, frontAge, clock, inWords, STALE_MS } from "./order.js";
 
-// M3: the one slot table. Array order inside a slot is authoritative; the
-// client never sorts. Hours 00:00-05:00 sit at the foot of night.
-// Two siblings must agree with this table or an item lands in the wrong band:
-// SLOTS in worker/src/validate.js (which names are legal) and SLUG_SLOT in
-// crystal-assistant/push_brief.py (which item goes where). Change all three.
-const SLOTS = [
-  { t: "dawn", from: 5, to: 8 },
-  { t: "morning", from: 8, to: 12 },
-  { t: "day", from: 12, to: 17 },
-  { t: "evening", from: 17, to: 21 },
-  { t: "night", from: 21, to: 24 },
-];
-// R2: "day" is no longer a clock band. It is the pool of things done whenever
-// there is time, so it shows no hours (an hour range would be a promise the
-// pool does not make) and the now-line never walks through it.
-const POOL = "day";
 // The scanned handwritten list arrives as ordinary timeline items under this
 // section. The pen glyph is the only thing that separates his own writing from
 // what the pipeline generated.
@@ -95,7 +81,8 @@ function pickDay(date, force) {
 }
 
 // Grades no longer render on this board at all: grading is interview prep, so
-// the graded cards live on the Career tab's reps archive (David, 2026-08-16).
+// the graded cards live in Whiteboard, Companies, under older recorded reps
+// (they lived on Crystal's Career tab from 2026-08-16 until it moved, 2026-10-13).
 // The recorder below only records and says where the grade will land.
 
 // ---------- render ----------
@@ -186,17 +173,32 @@ function render(offlineNote, emptyDayNote) {
   // Only on today. An earlier day's front page would be a dashboard of what is
   // true NOW pretending to belong to a past date, which is the exact confusion
   // the stale-brief banner already exists to prevent.
+  // David, 2026-10-13: "Priority list, not slots." Top to bottom: what is
+  // fixed today (the only clocks on the screen), the day's news episode, ONE
+  // ordered list of what to do next, the daily floor, then everything else the
+  // day owes folded away. The five slot bands this replaced are gone.
+  const placed = new Set();
+  if (isToday || stale) {
+    const fp = brief.front || {};
+    root.appendChild(fixedSection(fp));
+    root.appendChild(listenLine());
+    // only the action cards the list actually shows count as placed; one cut
+    // by the cap falls through to "Rest of today", so every tick still renders
+    root.appendChild(nextSection(fp, date, actionItems(), placed));
+  }
+  root.appendChild(floorSection(date, placed));
+  const rest = restSection(date, placed);
+  if (rest) root.appendChild(rest);
+
   if (isToday || stale) {
     const fp = brief.front;
     if (fp && fp.health) root.appendChild(healthSection(fp.health));
-    if (fp && Array.isArray(fp.due)) root.appendChild(dueSection(fp.due));
     if (fp && Array.isArray(fp.board) && fp.board.length) root.appendChild(taskBoard(fp.board));
     if (fp && Array.isArray(fp.tabs)) root.appendChild(tabStrip(fp.tabs));
   }
 
   if (brief.scoreboard && brief.scoreboard.length) root.appendChild(scoreboard(brief.scoreboard));
 
-  root.appendChild(timeline(date));
   if (brief.scanThumb) root.appendChild(scanCard(brief.scanThumb));
   renderCards(root, brief.cards || [], date, local);
 
@@ -210,8 +212,10 @@ function render(offlineNote, emptyDayNote) {
 // Markets merged into the Money tab, and Shop's route is #/shopping. Kept here
 // rather than in the payload because a route is the app's business, not the
 // laptop's: a renamed tab must not require a laptop push to fix the links.
+const WHITEBOARD = "https://whiteboard.janniksin.workers.dev/";
 const TAB_ROUTE = {
-  news: "news", markets: "money", money: "money", career: "career",
+  career: WHITEBOARD,
+  news: "news", markets: "money", money: "money",
   listen: "listen", shop: "shopping", library: "library",
 };
 
@@ -285,27 +289,174 @@ function taskRow(r, section) {
   return li;
 }
 
-function dueSection(rows) {
+// ---- fixed today: the only clocks on the screen ----
+// Classes, meetings and exams from his calendar (front.anchors, built on the
+// laptop and refreshed hourly) and lights out on a school night. Titles come
+// from anyone who can send him an invite, so they are set as TEXT, never
+// through md() (tribunal Red Team: a hostile invite must not plant a link).
+function fixedSection(fp) {
+  const now = new Date();
+  const { list, current, next } = anchorsFor(fp, todayIso(), now);
   const sec = el("section", { class: "front-due" });
-  sec.appendChild(el("h2", {}, "Due today"));
-  if (!rows.length) {
-    sec.appendChild(el("p", { class: "front-clear" }, "Nothing is due or overdue. The board is clear."));
-    return sec;
-  }
+  sec.appendChild(el("h2", {}, "Fixed today"));
+  const lead = el("p", { class: "front-clear", style: "font-style:normal" });
+  if (current) lead.textContent = "Now: " + current.title + ", until " + clock(current.end);
+  else if (next) lead.textContent = "Next: " + next.title + " at " + clock(next.at) + ", " + inWords(next.at - now);
+  else lead.textContent = list.length ? "Nothing fixed left today." : "Nothing fixed today.";
+  sec.appendChild(lead);
+  if (!list.length) return sec;
   const ul = el("ul", { class: "duelist" });
-  rows.forEach((r) => {
-    // Rows from Tasks.md carry a tk- id and get a box. A due row from any other
-    // note is still shown, read-only, because there is nowhere to write it back.
-    if (/^tk-/.test(String(r.id || ""))) { ul.appendChild(taskRow(r, "Due today")); return; }
-    const li = el("li", { class: (r.days || 0) < 0 ? "due over" : "due" });
-    li.appendChild(el("span", { class: "duetext" }, md(String(r.text || ""))));
-    const meta = el("span", { class: "duemeta" });
-    meta.appendChild(el("span", { class: "duewhen" }, whenText(r) || "today"));
-    if (r.owner) meta.appendChild(el("span", { class: "dueowner" }, String(r.owner)));
-    li.appendChild(meta);
+  list.forEach((a) => {
+    const past = (a.end || a.at) <= now;
+    const li = el("li", { class: "due" + (past ? " done" : ""), style: "flex-direction:row;gap:11px" });
+    li.appendChild(el("span", { class: "duewhen", style: "flex:0 0 auto" })).textContent = clock(a.at);
+    li.appendChild(el("span", { class: "duetext" })).textContent = a.title;
     ul.appendChild(li);
   });
   sec.appendChild(ul);
+  return sec;
+}
+
+// ---- the day's news episode, one line that opens Listen ----
+// The index only (a few hundred bytes), once a day; never the audio, which is
+// Listen's to fetch (tribunal Red Team, Ledger).
+const NEWS_KEY = "crystal.today.news";
+function listenLine() {
+  const sec = el("section", { class: "front-tabs" });
+  const paint = (meta) => {
+    sec.innerHTML = "";
+    if (!meta) { sec.hidden = true; return; }
+    sec.hidden = false;
+    const btn = el("button", { type: "button", class: "tablink" });
+    btn.appendChild(el("span", { class: "tabname" }, "Listen"));
+    const mins = meta.seconds ? ", " + Math.round(meta.seconds / 60) + " min" : "";
+    btn.appendChild(el("span", { class: "tabtop" })).textContent = "▶ " + String(meta.title || "Today's news") + mins;
+    btn.addEventListener("click", () => go("#/listen"));
+    const ul = el("ul", { class: "tabstrip" });
+    ul.appendChild(el("li", { class: "tabline" })).appendChild(btn);
+    sec.appendChild(ul);
+  };
+  const today = todayIso();
+  const cached = lsGet(NEWS_KEY, null);
+  if (cached && cached.date === today && cached.meta) { paint(cached.meta); return sec; }
+  paint(null);
+  api("/episode").then((d) => {
+    const meta = todaysNews((d && d.items) || [], today);
+    // a miss is not cached: the episode may land later in the morning
+    if (meta) lsSet(NEWS_KEY, { date: today, meta });
+    paint(meta);
+  }).catch(() => {});
+  return sec;
+}
+
+// ---- next up: one ordered list ----
+// Today's action cards: top-level work items from the morning build (paper,
+// interview rep, outreach block). Floor items and groups stay where they are.
+const ACTION_KINDS = new Set(["action", "outreach", "answer", "listen"]);
+function actionItems() {
+  return (brief.timeline || []).filter((it) => it.kind !== "group" && it.floor !== true && ACTION_KINDS.has(it.kind));
+}
+
+function nextRow(x, date) {
+  if (x.kind === "action") return row(date, x.item, { reason: x.reason });
+  const r = x.row;
+  let li;
+  if (/^tk-/.test(String(r.id || ""))) {
+    li = taskRow(r, x.section);
+  } else {
+    // a due row from another note: shown, read-only, nowhere to write it back
+    li = el("li", { class: (r.days || 0) < 0 ? "due over" : "due" });
+    li.appendChild(el("span", { class: "duetext" }, md(String(r.text || ""))));
+  }
+  // the reason replaces the bare date: "2 days over", "recruiter", "due Fri"
+  let meta = li.querySelector(".duemeta");
+  if (!meta) {
+    meta = el("span", { class: "duemeta" });
+    (li.querySelector(".duecol") || li).appendChild(meta);
+  }
+  const when = meta.querySelector(".duewhen") || meta.insertBefore(el("span", { class: "duewhen" }), meta.firstChild);
+  when.textContent = x.reason;
+  return li;
+}
+
+function nextSection(fp, date, acts, placed) {
+  const sec = el("section", { class: "front-due" });
+  const head = el("h2", {}, "Next up");
+  sec.appendChild(head);
+  const age = frontAge(fp, new Date());
+  if (age !== null) {
+    head.appendChild(el("span", { class: "foldn", style: "margin-left:8px" })).textContent =
+      "updated " + clock(new Date(Date.parse(fp.asof)));
+  }
+  const ul = el("ul", { class: "duelist" });
+  if (age !== null && age > STALE_MS) {
+    // a list that looks live but is hours old is how he stops trusting it
+    ul.style.opacity = ".55";
+    sec.appendChild(el("p", { class: "front-clear" },
+      "This list is from " + clock(new Date(Date.parse(fp.asof))) + ". The laptop refreshes it every hour while it is awake."));
+  }
+  const { rows, more } = nextList(fp, acts, todayIso());
+  if (!rows.length) {
+    sec.appendChild(el("p", { class: "front-clear" }, "Nothing is due and nothing is next. The board is clear."));
+    return sec;
+  }
+  rows.forEach((x) => {
+    if (x.kind === "action") placed.add(x.item.id);
+    if (x.kind !== "overdue") { ul.appendChild(nextRow(x, date)); return; }
+    // more than three overdue: one row, opened on a tap, so the pile does not
+    // take every slot of the list
+    const li = el("li", { class: "due over", style: "display:block" });
+    const det = el("details", {});
+    const sum = el("summary", {});
+    sum.appendChild(el("span", { class: "duetext" })).textContent = x.reason + ", oldest first";
+    det.appendChild(sum);
+    const inner = el("ul", { class: "duelist" });
+    x.rows.forEach((y) => inner.appendChild(nextRow(y, date)));
+    det.appendChild(inner);
+    li.appendChild(det);
+    ul.appendChild(li);
+  });
+  sec.appendChild(ul);
+  if (more) sec.appendChild(el("p", { class: "boardnote" }, "And " + more + " more on the task board below."));
+  return sec;
+}
+
+// ---- the daily floor and the rest of today ----
+// The floor is whatever the payload marks floor:true (lights out, wake, write
+// tomorrow's list), never a hand list: the reward reveal is gated on exactly
+// these (reward.js), so a missing one would kill it (tribunal Engineer).
+function floorSection(date, placed) {
+  const items = (brief.timeline || []).filter((it) => it.floor === true && !placed.has(it.id));
+  const wrap = el("div", { class: "tl" });
+  if (!items.length) return wrap;
+  wrap.appendChild(el("div", { class: "tl-mark" }, "daily floor"));
+  items.forEach((it) => { placed.add(it.id); wrap.appendChild(row(date, it)); });
+  return wrap;
+}
+
+// Every other thing the day owes (morning routine, email people, the scanned
+// list, the fun tick) still renders as a tick, because the meter and the
+// "full day" pick count every leaf. Folded, so the day reads on one screen
+// (8/17); on an earlier day there is no list above, so it starts open.
+function restSection(date, placed) {
+  const items = (brief.timeline || []).filter((it) => !placed.has(it.id));
+  if (!items.length) return null;
+  const leaves = flatItems(items);
+  const det = el("details", { class: "boardfold" });
+  det.open = !!viewDate && viewDate !== todayIso();
+  const sum = el("summary", {});
+  sum.appendChild(el("span", { class: "foldtitle" }, "Rest of today"));
+  const n = el("span", { class: "foldn", style: "margin-left:8px" });
+  const count = () => { n.textContent = leaves.filter((x) => doneMap[x.id]).length + " of " + leaves.length; };
+  count();
+  sum.appendChild(n);
+  det.appendChild(sum);
+  const wrap = el("div", { class: "tl", style: "margin-top:6px" });
+  items.forEach((it) => wrap.appendChild(it.kind === "group" ? groupRow(date, it) : row(date, it)));
+  wrap.addEventListener("change", count);
+  det.appendChild(wrap);
+  const sec = el("section", { class: "front-due" });
+  sec.appendChild(det);
   return sec;
 }
 
@@ -367,7 +518,8 @@ function tabStrip(tabs) {
     const btn = el("button", { type: "button", class: "tablink" });
     btn.appendChild(el("span", { class: "tabname" }, String(t.label || t.tab)));
     btn.appendChild(el("span", { class: "tabtop" }, md(String(t.line || ""))));
-    btn.addEventListener("click", () => go("#/" + route));
+    // an absolute URL is another app (career lives in Whiteboard since 10/13)
+    btn.addEventListener("click", () => (route.startsWith("https://") ? window.open(route, "_blank", "noopener") : go("#/" + route)));
     li.appendChild(btn);
     ul.appendChild(li);
   });
@@ -445,56 +597,12 @@ function tierClass(it) {
 // metadata, never from a slug: floor:true + night is that item by construction.
 const isScanItem = (it) => it.kind === "scan" || (it.floor === true && it.t === "night");
 
-function timeline(date) {
-  const wrap = el("div", { class: "tl" });
-  wrap.appendChild(el("div", { class: "tl-rail" }));
-  const items = brief.timeline || [];
-
-  SLOTS.forEach((slot) => {
-    const sec = el("section", { class: "tl-slot", "data-slot": slot.t });
-    sec.appendChild(el("div", { class: "tl-mark" }, slot.t === POOL
-      ? 'whenever<span class="hrs">· as there is time</span>'
-      : slot.t + '<span class="hrs">' + String(slot.from).padStart(2, "0") + "-" +
-        String(slot.to).padStart(2, "0") + "</span>"));
-    // payload order is authoritative inside every band, the pool included
-    items.filter((it) => it.t === slot.t)
-      .forEach((it) => sec.appendChild(it.kind === "group" ? groupRow(date, it) : row(date, it)));
-    wrap.appendChild(sec);
-  });
-
-  const now = el("i", { class: "tl-now" }, '<b></b><i>now</i>');
-  wrap.appendChild(now);
-  // offsetTop is measured against .tl, so it has to be in the document first
-  requestAnimationFrame(() => {
-    const top = nowTop(wrap);
-    if (top === null) { now.hidden = true; return; }
-    now.style.top = Math.round(top) + "px";
-  });
-  return wrap;
-}
-
-// The clock is interpolated across the two real stretches of the day, 05-12
-// and 17-24. Between them there is only the pool, so the marker pins to its
-// top rather than crawling down a band that has no hours.
-function nowTop(wrap) {
-  const d = new Date();
-  const h = d.getHours() + d.getMinutes() / 60;
-  let band, frac;
-  if (h >= 12 && h < 17) {
-    band = SLOTS.find((s) => s.t === POOL);
-    frac = 0;
-  } else {
-    band = SLOTS.find((s) => s.t !== POOL && h >= s.from && h < s.to);
-    if (band) frac = (h - band.from) / (band.to - band.from);
-    else { band = SLOTS[SLOTS.length - 1]; frac = 1; } // the small hours
-  }
-  const sec = wrap.querySelector('[data-slot="' + band.t + '"]');
-  if (!sec) return null;
-  return sec.offsetTop + frac * sec.offsetHeight;
-}
-
-function row(date, it) {
-  const r = el("div", { class: "tl-row " + tierClass(it) + (doneMap[it.id] ? " done" : "") });
+// `flat` ({reason}) draws the same row as an item of the Next list: same tick,
+// same doneMap, so the meter and the reward still count it, in the list's look.
+function row(date, it, flat) {
+  const r = flat
+    ? el("li", { class: "due tickrow" + (doneMap[it.id] ? " done" : ""), style: "flex-wrap:wrap" })
+    : el("div", { class: "tl-row " + tierClass(it) + (doneMap[it.id] ? " done" : "") });
   // B1: the tick carries the item's full metadata; outreach retirement and the
   // vault merge both key off target.
   const extra = {
@@ -523,6 +631,11 @@ function row(date, it) {
   const lab = el("button", { type: "button", class: "tl-lab", "data-more": hasDetail ? "1" : "0" },
     pen + md(it.label));
   r.appendChild(lab);
+  if (flat && flat.reason) {
+    const meta = el("span", { class: "duemeta" });
+    meta.appendChild(el("span", { class: "duewhen" })).textContent = flat.reason;
+    r.appendChild(meta);
+  }
 
   if (!hasDetail) return r;
 
@@ -696,7 +809,7 @@ function recorder(det, it) {
   det.appendChild(live);
   paintLive(live);
 
-  det.appendChild(el("p", { class: "hint" }, "Grades land on the Career tab, under interview reps."));
+  det.appendChild(el("p", { class: "hint" }, "Grades land in Whiteboard, under Companies."));
 
   // The first question is already rendered by the card's own markdown, with
   // its best-take line. From the second on, the recorder owns the question.
@@ -714,7 +827,7 @@ function recorder(det, it) {
   if (!queue.length) {
     btn.disabled = true;
     nextBtn.hidden = true;
-    note.textContent = "Every question on today's card is recorded. Grades land on the Career tab.";
+    note.textContent = "Every question on today's card is recorded. Grades land in Whiteboard.";
     return;
   }
   if (mime === null) { btn.disabled = true; note.textContent = "This browser cannot record audio. Speak it out loud anyway."; return; }
@@ -778,7 +891,7 @@ function recorder(det, it) {
           ? "Saved, but the audio looks silent. Check the mic and do it again."
           : (left > 0
             ? "Saved. Tap NEXT QUESTION to keep going, " + left + " more on the card."
-            : "Saved. Grades run with the 7:30 morning build and land on the Career tab.");
+            : "Saved. Grades run with the 7:30 morning build and land in Whiteboard.");
         paintLive(live);
       };
       // a timeslice means a chunk lands every 5s, so a killed tab costs seconds
@@ -827,7 +940,7 @@ function paintLive(live) {
     if (s.pending) bits.push(s.pending + " waiting to send");
     // a dead upload names its reason: a silent count teaches nothing
     if (s.dead) bits.push(s.dead + " not sent" + (s.why ? ", " + s.why : ""));
-    bits.push("grades on the Career tab");
+    bits.push("grades in Whiteboard");
     live.textContent = bits.join(", ") + ".";
   });
 }
