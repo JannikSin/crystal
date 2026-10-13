@@ -296,6 +296,13 @@ export function validateBriefV2(p) {
         if (a.cal !== undefined && (!isStr(a.cal) || a.cal.length > 40)) return `${at}.cal must be a string of at most 40`;
       }
     }
+    // 2026-10-13 (darkhold, hugoniot): paddington's night-shift morning line.
+    if (f.night !== undefined) {
+      const n = f.night;
+      if (!n || typeof n !== "object" || Array.isArray(n)) return "front.night must be an object";
+      if (!isTxt(n.line) || n.line.length > 200) return "front.night.line required, at most 200 characters";
+      if (n.asof !== undefined && (!isStr(n.asof) || n.asof.length > 40)) return "front.night.asof must be a short string";
+    }
     if (f.health !== undefined) {
       const h = f.health;
       if (!h || typeof h !== "object") return "front.health must be an object";
