@@ -282,8 +282,11 @@ function bytes200(buf, type) {
 
 // Store under <prefix>:<date>, and under <prefix>:latest unless an older date
 // is being backfilled (history must not clobber the phone's latest).
-async function putDated(env, prefix, date, raw) {
-  await env.STORE.put(`${prefix}:${date}`, raw);
+// ttl (seconds) expires only the dated copy; <prefix>:latest never expires.
+// Briefs pass BLOB_TTL (2026-10-13, curvature's Tribunal: calendar anchors
+// ride in the brief, so dated copies must not pile up forever).
+async function putDated(env, prefix, date, raw, ttl = 0) {
+  await env.STORE.put(`${prefix}:${date}`, raw, ttl ? { expirationTtl: ttl } : undefined);
   let latestDate = "";
   try {
     latestDate = JSON.parse((await env.STORE.get(`${prefix}:latest`)) || "{}").date || "";
@@ -503,7 +506,7 @@ export default {
       } else if (!DATE_RE.test(body?.date || "")) {
         return json(400, { error: "brief.date required" });
       }
-      await putDated(env, "brief", body.date, raw);
+      await putDated(env, "brief", body.date, raw, BLOB_TTL);
       return json(200, { ok: true, date: body.date, bytes: raw.length });
     }
 

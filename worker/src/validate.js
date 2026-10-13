@@ -276,6 +276,23 @@ export function validateBriefV2(p) {
       }
       if (rows > 400) return "front.board: more than 400 open rows";
     }
+    // 2026-10-13 (curvature's Today plan, hugoniot): the day's fixed calendar
+    // events as anchors. Only these four keys, so a pusher bug cannot smuggle
+    // a whole calendar export onto the first screen.
+    if (f.anchors !== undefined) {
+      if (!isArr(f.anchors)) return "front.anchors must be an array";
+      if (f.anchors.length > 20) return "front.anchors: more than 20 events, that is not a day";
+      for (let i = 0; i < f.anchors.length; i++) {
+        const a = f.anchors[i], at = `front.anchors[${i}]`;
+        if (!a || typeof a !== "object" || Array.isArray(a)) return `${at} must be an object`;
+        const extra = Object.keys(a).filter((k) => !["t", "end", "title", "cal"].includes(k));
+        if (extra.length) return `${at}: unknown key ${extra[0]}`;
+        if (!isTxt(a.t) || a.t.length > 40) return `${at}.t required, at most 40 characters`;
+        if (a.end !== undefined && (!isStr(a.end) || a.end.length > 40)) return `${at}.end must be a string of at most 40`;
+        if (!isTxt(a.title) || a.title.length > 120) return `${at}.title required, at most 120 characters`;
+        if (a.cal !== undefined && (!isStr(a.cal) || a.cal.length > 40)) return `${at}.cal must be a string of at most 40`;
+      }
+    }
     if (f.health !== undefined) {
       const h = f.health;
       if (!h || typeof h !== "object") return "front.health must be an object";
