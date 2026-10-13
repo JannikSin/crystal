@@ -313,6 +313,12 @@ function fixedSection(fp) {
   else if (!loaded) lead.textContent = "Your calendar has not reached the phone today. The laptop adds it when it next wakes.";
   else lead.textContent = list.length ? "Nothing fixed left today." : "Nothing fixed today.";
   sec.appendChild(lead);
+  // the Mac's night-shift line (front.night, darkhold via push_brief), only
+  // when it was written today; laptop-made text, still set as text
+  const night = fp && fp.night;
+  if (night && night.line && String(night.asof || "").slice(0, 10) === todayIso()) {
+    sec.appendChild(el("p", { class: "boardnote" })).textContent = String(night.line).slice(0, 200);
+  }
   if (!list.length) return sec;
   const item = (a, past) => {
     const li = el("li", { class: "due" + (past ? " done" : ""), style: "flex-direction:row;gap:11px" });
