@@ -266,7 +266,9 @@ function boardTick(r, section) {
 }
 function whenText(r) {
   if (!r.due) return "";
-  const n = Number(r.days || 0);
+  // counted against the phone's today, not the laptop's build day, so the
+  // board agrees with Next up on a brief from yesterday (tribunal Realist)
+  const n = Math.round((Date.parse(r.due + "T12:00:00") - Date.parse(todayIso() + "T12:00:00")) / 86400000);
   // "14 days over" is a fact he can act on; a bare red dot is not.
   if (n < 0) return Math.abs(n) + (Math.abs(n) === 1 ? " day over" : " days over");
   if (n === 0) return "today";
@@ -398,10 +400,10 @@ function nextSection(fp, date, acts, placed) {
   const head = el("h2", {}, "Next up");
   sec.appendChild(head);
   const age = frontAge(fp, new Date());
+  // yesterday's "updated 9:05 pm" must not read as today's (tribunal Engineer)
+  const at = age === null ? null : new Date(Date.parse(fp.asof));
+  const day = !at || String(fp.asof).slice(0, 10) === todayIso() ? "" : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][at.getDay()] + " ";
   if (age !== null) {
-    // yesterday's "updated 9:05 pm" must not read as today's (tribunal Engineer)
-    const at = new Date(Date.parse(fp.asof));
-    const day = String(fp.asof).slice(0, 10) === todayIso() ? "" : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][at.getDay()] + " ";
     head.appendChild(el("span", { class: "foldn", style: "margin-left:8px" })).textContent = "updated " + day + clock(at);
   }
   const ul = el("ul", { class: "duelist" });
@@ -409,7 +411,7 @@ function nextSection(fp, date, acts, placed) {
     // a list that looks live but is hours old is how he stops trusting it
     ul.style.opacity = ".55";
     sec.appendChild(el("p", { class: "front-clear" },
-      "This list is from " + clock(new Date(Date.parse(fp.asof))) + ". The laptop refreshes it every hour while it is awake."));
+      "This list is from " + day + clock(at) + ". The laptop refreshes it every hour while it is awake."));
   }
   const { rows, more } = nextList(fp, acts, todayIso());
   if (!rows.length) {

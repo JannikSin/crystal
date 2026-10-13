@@ -93,8 +93,11 @@ export function nextList(front, actions, today) {
   if (over.length > OVERDUE_FOLD) {
     const fold = { kind: "overdue", rank: 0, reason: over.length + " overdue", rows: over };
     const rest = out.filter((x) => x.rank !== 0);
-    const at = rest.findIndex((x) => x.rank > 2);
-    rows = at === -1 ? [...rest, fold] : [...rest.slice(0, at), fold, ...rest.slice(at)];
+    // ...but never past the cap: with 26 rows due today the fold fell off the
+    // screen and the overdue pile vanished (tribunal Realist, loop 1)
+    const found = rest.findIndex((x) => x.rank > 2);
+    const at = Math.min(found === -1 ? rest.length : found, CAP - 1);
+    rows = [...rest.slice(0, at), fold, ...rest.slice(at)];
   }
   return { rows: rows.slice(0, CAP), more: Math.max(0, rows.length - CAP) };
 }

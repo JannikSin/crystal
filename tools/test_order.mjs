@@ -63,6 +63,14 @@ assert.equal(frontAge({ asof: "2026-10-13T09:00-04:00" }, at10), 3600000);
 assert.equal(sectionLabel("🔥 NOW: this week, Mon 10/12"), "now");
 assert.equal(sectionLabel("✎ ON THE DESK: notes"), "on the desk");
 
+// a long due-today list never pushes the overdue fold off the list
+const busy = { board: [{ title: "🚨 RECRUITER", rows: [row("r1", null), row("r2", null)] },
+  { title: "NOW", rows: [...Array.from({ length: 9 }, (_, i) => row("t" + i, 0)), row("o1", -1), row("o2", -2), row("o3", -3), row("o4", -4)] }] };
+({ rows, more } = nextList(busy, [], T));
+assert.equal(rows.length, CAP);
+assert.equal(rows[CAP - 1].kind, "overdue", "the fold is the last visible row");
+assert.equal(rows[CAP - 1].rows.length, 4);
+
 // days are recomputed against the phone's today, not the laptop's build day
 ({ rows } = nextList({ board: [{ title: "NOW", rows: [{ id: "y", text: "y", due: "2026-10-12", days: 0 }] }] }, [], T));
 assert.equal(rows[0].reason, "1 day over");
