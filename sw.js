@@ -79,7 +79,16 @@
 //      four land together. NOT covered by this bump: worker/src/index.js gains
 //      /episode, which needs a wrangler deploy BEFORE this ships, or the shelf
 //      just says there is no audio yet.
-const CACHE = "crystal-v34";
+// v35: Files in the Library (standby, David 2026-10-10). New module files.js
+//      (precached below), library.js mounts it above the folder chips, and it
+//      reuses the .episode/.erow CSS, so no app.css change. NOT covered by this
+//      bump: worker/src/index.js gains /file, which needs a wrangler deploy
+//      BEFORE this ships, or the shelf just stays hidden (it hides on 404).
+//      Same bump (curvature, 2026-10-13, one push): Today is a priority list.
+//      New module order.js (precached below); today.js rewritten; Career off
+//      the tab bar (it lives in Whiteboard), so career.js leaves the precache.
+//      Reuses existing CSS (.front-due/.duelist/.tl/.boardfold), no app.css.
+const CACHE = "crystal-v35";
 
 const PRECACHE = [
   "./",
@@ -89,12 +98,13 @@ const PRECACHE = [
   "./sync.js",
   "./reward.js",
   "./today.js",
+  "./order.js",
   "./news.js",
   "./money.js",
-  "./career.js",
   "./shopping.js",
   "./listen.js",
   "./episode.js",
+  "./files.js",
   "./library.js",
   "./desk.js",
   "./app.js",

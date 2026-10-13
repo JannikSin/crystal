@@ -20,6 +20,7 @@ import {
   root, api, el, md, lsGet, lsSet, lsDel, idbGet, idbSet, go, mastHead, appFooter,
   emptyState, isTab,
 } from "./core.js";
+import { filesCard } from "./files.js";
 
 let library = null;
 // Session state, deliberately NOT localStorage. A search string that outlives
@@ -281,6 +282,9 @@ function renderIndex(note, noLibrary) {
   const sub = library ? notes().length + " notes · " + String(library.date).slice(0, 10) : "";
   root.appendChild(mastHead("library", "The Library", sub));
   if (note) root.appendChild(el("div", { class: "banner" }, note));
+  // Files first: a PDF made for him today is the thing he opened the tab for
+  // (standby, 2026-10-10). It hides itself when there are none.
+  root.appendChild(filesCard());
 
   if (noLibrary || !library) {
     root.appendChild(emptyState("📚", "No notes yet",
