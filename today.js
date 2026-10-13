@@ -264,11 +264,16 @@ function boardTick(r, section) {
     paintBoardRow(r.id, on);
   });
 }
+// Days until a row is due, counted against the PHONE's today, not the laptop's
+// build day, so the board agrees with Next up on a brief from yesterday
+// (tribunal Realist). An unreadable date falls back to the laptop's figure.
+function dueDays(r) {
+  const n = Math.round((Date.parse(r.due + "T12:00:00") - Date.parse(todayIso() + "T12:00:00")) / 86400000);
+  return isNaN(n) ? Number(r.days || 0) : n;
+}
 function whenText(r) {
   if (!r.due) return "";
-  // counted against the phone's today, not the laptop's build day, so the
-  // board agrees with Next up on a brief from yesterday (tribunal Realist)
-  const n = Math.round((Date.parse(r.due + "T12:00:00") - Date.parse(todayIso() + "T12:00:00")) / 86400000);
+  const n = dueDays(r);
   // "14 days over" is a fact he can act on; a bare red dot is not.
   if (n < 0) return Math.abs(n) + (Math.abs(n) === 1 ? " day over" : " days over");
   if (n === 0) return "today";
@@ -276,7 +281,7 @@ function whenText(r) {
   return "in " + n + " days";
 }
 function taskRow(r, section) {
-  const over = r.due && Number(r.days || 0) < 0;
+  const over = r.due && dueDays(r) < 0;
   const li = el("li", { class: "due tickrow" + (over ? " over" : "") });
   li.setAttribute("data-tk", r.id);
   if (boardDone(r.id)) li.classList.add("done");
