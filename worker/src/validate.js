@@ -494,7 +494,10 @@ export function validateLibrary(p) {
   if (!p || typeof p !== "object") return "payload must be a JSON object";
   if (!DATE_RE.test(p.date || "")) return "date must be YYYY-MM-DD";
   if (!isArr(p.notes) || !p.notes.length) return "notes must be a non-empty array";
-  if (p.notes.length > 200) return "notes: 200 max, trim the index";
+  // 200 was a guess on 2026-08-11, never measured. Raised to 400 2026-10-12
+  // (hugoniot): the real ceilings are BODY_CAP["/library"] in index.js and
+  // a 25 MiB KV value; the phone keeps the payload in IndexedDB.
+  if (p.notes.length > 400) return "notes: 400 max, trim the index";
   const seen = new Set();
   for (let i = 0; i < p.notes.length; i++) {
     const n = p.notes[i], at = `notes[${i}]`;
