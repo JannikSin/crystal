@@ -156,7 +156,10 @@ export function validateHoldings(p) {
   return null;
 }
 
-// ---------- brief v2 (the timeline payload) ----------
+// ---------- brief v2 ----------
+// Since the Today release (2026-10-13, curvature) the phone's first screen is
+// built from `front` (due, board, anchors); the timeline and its slot `t` are
+// legacy, still required here, and read only by isScanItem.
 // {v:2, date, day, strap?, built, scoreboard?[], reward?, feedbackNote?,
 //  scanThumb? (data:image/jpeg;base64 under 40KB),
 //  timeline:[{id, t, label, tier, kind?, target?, section?, floor?, state?}]}
