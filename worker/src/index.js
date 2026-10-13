@@ -115,8 +115,7 @@ const BODY_CAP = {
   // over 40 minutes of speech; the phone stops itself at 30 to stay clear.
   "/answer": 20 * 1024 * 1024,
   "/deskaudio": 20 * 1024 * 1024,
-  // 8 MiB since 2026-10-12 (hugoniot): 228 notes measured 3.4 MB, 84% of the old 4 MiB
-  "/library": 8 * 1024 * 1024,
+  "/library": 4 * 1024 * 1024,
   // the daily Listen episode, built at 32 kbps mono: 25 minutes is about 6 MB
   "/episode": 20 * 1024 * 1024,
 };
