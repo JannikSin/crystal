@@ -84,9 +84,10 @@ surface is built for that and nothing may require same-day fidelity.
 
 ## Article 3. Settled. Do not re-litigate
 
-- **Six tabs, one layout language each.** Today is a vertical day timeline, News
-  a ranked edition, Markets a ticker terminal, Money a ledger, Career a dossier
-  with a daily slip, Listen a queue. The v4 rebuild (2026-08-08) replaced one
+- **Six tabs, one layout language each.** Today is a priority list (David,
+  2026-10-13: "Priority list, not slots"; only real anchors carry a clock), News
+  a ranked edition, Money a ledger with the market digest, Shop a list, Library
+  the vault, Listen a queue. Career left for Whiteboard on 2026-10-13. The v4 rebuild (2026-08-08) replaced one
   1,350-line `app.js` with ES modules and no build step; do not reconsolidate.
 - **The earned-fun gate is the sleep FLOOR** (items with `floor: true`), never the
   whole board. Countdowns render only when close: two weekly, four monthly.

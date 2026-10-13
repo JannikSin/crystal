@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { nextList, anchorsFor, todaysNews, frontAge, sectionLabel, clock, inWords, CAP } from "../order.js";
 
 const T = "2026-10-13"; // a Tuesday
-const row = (id, days, extra = {}) => ({ id, text: id, ...(days === null ? {} : { due: "2026-10-" + (13 + days), days }), ...extra });
+const iso = (n) => { const d = new Date(T + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const row = (id, days, extra = {}) => ({ id, text: id, ...(days === null ? {} : { due: iso(days), days }), ...extra });
 
 const front = {
   board: [
@@ -29,10 +30,11 @@ assert.equal(new Set(rows.map((r) => r.row ? r.row.id : r.item.id)).size, rows.l
 // more than three overdue fold into one row, which keeps them all
 const many = { board: [{ title: "NOW", rows: [row("a", -1), row("b", -2), row("c", -3), row("d", -4), row("e", 0)] }] };
 ({ rows } = nextList(many, [], T));
-assert.equal(rows[0].kind, "overdue");
-assert.equal(rows[0].reason, "4 overdue");
-assert.deepEqual(rows[0].rows.map((r) => r.row.id), ["d", "c", "b", "a"]);
-assert.equal(rows[1].row.id, "e");
+// the fold sits after the due-today rows, not in slot one
+assert.equal(rows[0].row.id, "e");
+assert.equal(rows[1].kind, "overdue");
+assert.equal(rows[1].reason, "4 overdue");
+assert.deepEqual(rows[1].rows.map((r) => r.row.id), ["d", "c", "b", "a"]);
 assert.ok(rows.length <= CAP);
 
 // anchors: only today's, plus lights out on a school night, next and current
@@ -60,5 +62,20 @@ assert.equal(frontAge({}, at10), null);
 assert.equal(frontAge({ asof: "2026-10-13T09:00-04:00" }, at10), 3600000);
 assert.equal(sectionLabel("🔥 NOW: this week, Mon 10/12"), "now");
 assert.equal(sectionLabel("✎ ON THE DESK: notes"), "on the desk");
+
+// days are recomputed against the phone's today, not the laptop's build day
+({ rows } = nextList({ board: [{ title: "NOW", rows: [{ id: "y", text: "y", due: "2026-10-12", days: 0 }] }] }, [], T));
+assert.equal(rows[0].reason, "1 day over");
+// a row 30 days out ranks below this week's undated work, and undated says so
+({ rows } = nextList({ board: [{ title: "NOW", rows: [row("far", 30), row("u", null)] }] }, [], T));
+assert.deepEqual(rows.map((r) => r.row.id), ["u", "far"]);
+assert.equal(rows[0].reason, "now, no date");
+// no anchors key, or a front from yesterday: not loaded, never "nothing fixed"
+assert.equal(anchorsFor({}, T, at10).loaded, false);
+assert.equal(anchorsFor({ anchors: [], asof: "2026-10-12T21:00-04:00" }, T, at10).loaded, false);
+assert.equal(anchorsFor({ anchors: [], asof: "2026-10-13T07:30-04:00" }, T, at10).loaded, true);
+// a hostile title is carried as a plain string; today.js sets it as text
+assert.equal(anchorsFor({ asof: T + "T07:00", anchors: [{ t: T + "T15:00-04:00", title: "<img src=x onerror=alert(1)>" }] }, T, at10).list[0].title,
+  "<img src=x onerror=alert(1)>");
 
 console.log("order.js: next list, anchors, news and staleness checked, all assertions passed");

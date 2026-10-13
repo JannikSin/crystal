@@ -3,10 +3,11 @@
 // David, 2026-10-13: "Priority list, not slots, I agree." (and 10/7: "i live by
 // priority order of what needs to get done ... only time blocks are classes").
 // Top to bottom: Fixed today (calendar classes, meetings, exams and lights out,
-// the only clocks on the screen), the day's news episode, Next up (one ordered
-// list, order.js), the daily floor, the rest of today folded, then the board.
-// The five slot bands and the now-line that ran here from 2026-08 are gone; the
-// payload still carries each item's `t`, and nothing here reads it.
+// the only clocks on the screen), Next up (one ordered list, order.js), the
+// day's news episode, the daily floor, the rest of today folded, then the board.
+// The five slot bands and the now-line that ran here from 2026-08 are gone. The
+// payload still carries each item's slot `t` (the Worker requires it); its one
+// reader left is isScanItem below (floor + "night" = the handwritten list).
 
 import {
   root, api, el, md, blockMd, lsGet, lsSet, todayIso, shiftIso, fmtBuilt,
@@ -174,17 +175,17 @@ function render(offlineNote, emptyDayNote) {
   // true NOW pretending to belong to a past date, which is the exact confusion
   // the stale-brief banner already exists to prevent.
   // David, 2026-10-13: "Priority list, not slots." Top to bottom: what is
-  // fixed today (the only clocks on the screen), the day's news episode, ONE
-  // ordered list of what to do next, the daily floor, then everything else the
+  // fixed today (the only clocks on the screen), ONE ordered list of what to
+  // do next, the day's news episode, the daily floor, then everything else the
   // day owes folded away. The five slot bands this replaced are gone.
   const placed = new Set();
   if (isToday || stale) {
     const fp = brief.front || {};
     root.appendChild(fixedSection(fp));
-    root.appendChild(listenLine());
     // only the action cards the list actually shows count as placed; one cut
     // by the cap falls through to "Rest of today", so every tick still renders
     root.appendChild(nextSection(fp, date, actionItems(), placed));
+    root.appendChild(listenLine());
   }
   root.appendChild(floorSection(date, placed));
   const rest = restSection(date, placed);
@@ -235,7 +236,7 @@ const TAB_ROUTE = {
 const BOARD_DAYS = 4;
 function boardDone(id) {
   for (let back = 0; back < BOARD_DAYS; back++) {
-    const t = localTicks(shiftIso(todayIso(), -back))[id];
+    const t = localTicks(shiftIso(-back))[id];
     if (t) return !!t.done;
   }
   return false;
@@ -256,7 +257,7 @@ function boardTick(r, section) {
     // laptop would still close the row from that older record.
     if (!on) {
       for (let back = 1; back < BOARD_DAYS; back++) {
-        const d = shiftIso(todayIso(), -back);
+        const d = shiftIso(-back);
         if (localTicks(d)[r.id]) setTick(d, r.id, false, extra);
       }
     }
@@ -296,24 +297,37 @@ function taskRow(r, section) {
 // through md() (tribunal Red Team: a hostile invite must not plant a link).
 function fixedSection(fp) {
   const now = new Date();
-  const { list, current, next } = anchorsFor(fp, todayIso(), now);
+  const { list, current, next, loaded } = anchorsFor(fp, todayIso(), now);
   const sec = el("section", { class: "front-due" });
   sec.appendChild(el("h2", {}, "Fixed today"));
   const lead = el("p", { class: "front-clear", style: "font-style:normal" });
   if (current) lead.textContent = "Now: " + current.title + ", until " + clock(current.end);
-  else if (next) lead.textContent = "Next: " + next.title + " at " + clock(next.at) + ", " + inWords(next.at - now);
+  else if (next && loaded) lead.textContent = "Next: " + next.title + " at " + clock(next.at) + ", " + inWords(next.at - now);
+  else if (!loaded) lead.textContent = "Your calendar has not reached the phone today. The laptop adds it when it next wakes.";
   else lead.textContent = list.length ? "Nothing fixed left today." : "Nothing fixed today.";
   sec.appendChild(lead);
   if (!list.length) return sec;
-  const ul = el("ul", { class: "duelist" });
-  list.forEach((a) => {
-    const past = (a.end || a.at) <= now;
+  const item = (a, past) => {
     const li = el("li", { class: "due" + (past ? " done" : ""), style: "flex-direction:row;gap:11px" });
     li.appendChild(el("span", { class: "duewhen", style: "flex:0 0 auto" })).textContent = clock(a.at);
     li.appendChild(el("span", { class: "duetext" })).textContent = a.title;
-    ul.appendChild(li);
-  });
+    return li;
+  };
+  // what already ended folds away, so the list below is on the first screen
+  // (tribunal Usability)
+  const done = list.filter((a) => (a.end || a.at) <= now && a !== current);
+  const ahead = list.filter((a) => !done.includes(a));
+  const ul = el("ul", { class: "duelist" });
+  ahead.forEach((a) => ul.appendChild(item(a, false)));
   sec.appendChild(ul);
+  if (done.length) {
+    const det = el("details", {});
+    det.appendChild(el("summary", { class: "boardnote" }, done.length + " earlier today"));
+    const pu = el("ul", { class: "duelist" });
+    done.forEach((a) => pu.appendChild(item(a, true)));
+    det.appendChild(pu);
+    sec.appendChild(det);
+  }
   return sec;
 }
 
@@ -385,8 +399,10 @@ function nextSection(fp, date, acts, placed) {
   sec.appendChild(head);
   const age = frontAge(fp, new Date());
   if (age !== null) {
-    head.appendChild(el("span", { class: "foldn", style: "margin-left:8px" })).textContent =
-      "updated " + clock(new Date(Date.parse(fp.asof)));
+    // yesterday's "updated 9:05 pm" must not read as today's (tribunal Engineer)
+    const at = new Date(Date.parse(fp.asof));
+    const day = String(fp.asof).slice(0, 10) === todayIso() ? "" : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][at.getDay()] + " ";
+    head.appendChild(el("span", { class: "foldn", style: "margin-left:8px" })).textContent = "updated " + day + clock(at);
   }
   const ul = el("ul", { class: "duelist" });
   if (age !== null && age > STALE_MS) {
@@ -447,7 +463,8 @@ function restSection(date, placed) {
   const sum = el("summary", {});
   sum.appendChild(el("span", { class: "foldtitle" }, "Rest of today"));
   const n = el("span", { class: "foldn", style: "margin-left:8px" });
-  const count = () => { n.textContent = leaves.filter((x) => doneMap[x.id]).length + " of " + leaves.length; };
+  // how many are still open, never "0 of 18": a fraction reads as behind
+  const count = () => { n.textContent = String(leaves.filter((x) => !doneMap[x.id]).length); };
   count();
   sum.appendChild(n);
   det.appendChild(sum);

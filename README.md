@@ -5,10 +5,12 @@ disagree, and holds what is true regardless of the code: the job, the prohibitio
 settled decisions and their reasons, the armed failure modes, and the kill conditions.
 
 A small installable web app (PWA): a personal command center in six tabs on a
-phone. Today (a vertical day timeline with checkboxes), News (a ranked daily
-news edition), Markets (an evening market digest as a ticker terminal), Money
-(a portfolio and account ledger), Career (a company dossier with a daily
-outreach slip), Listen (a podcast and audiobook queue).
+phone. Today (a priority list: the day's fixed anchors, then one ordered list
+of what to do next, with checkboxes), News (a ranked daily news edition), Money
+(a portfolio and account ledger, with the market digest), Shop, Library, and
+Listen (the daily news episode, a podcast and audiobook queue). Career moved to
+Whiteboard, the interview app, on 2026-10-13; `career.js` stays in the tree
+until the next sw.js bump drops it from the cache.
 
 This repo is only the app shell: HTML, CSS, JS, icons. It contains no content
 and no personal data. At runtime the app fetches everything as JSON from a
@@ -30,12 +32,17 @@ gave each tab its own layout language:
 - `sync.js`: the outbound JSON queue plus the IndexedDB `uploads` blob store and
   its own upload pump.
 - `reward.js`: the earned-fun engine, a pure function (see `tools/test_reward.mjs`).
-- `today.js` `news.js` `markets.js` `money.js` `career.js` `listen.js`: one tab each.
+- `today.js` `news.js` `markets.js` `money.js` `shopping.js` `library.js` `listen.js`: one tab each.
+- `order.js`: Today's priority order, fixed anchors and staleness, pure (see `tools/test_order.mjs`).
+  The order rules live there and nowhere else.
 - `app.js`: the router table and boot.
 - `sw.js`: offline shell cache, precaching every file above. The cache name carries the version; sw.js itself documents when to bump it. Do not quote a number here, it goes stale the moment someone deploys.
 
-Brief payloads carry `v: 2` (a timeline). Anything without it renders through
-the old card board, so cached history days keep working.
+Brief payloads carry `v: 2` (a timeline of tickable items; each item's slot
+`t` is legacy since 2026-10-13 and only isScanItem reads it). `front.anchors`
+and `front.asof` (laptop, refreshed hourly) feed Fixed today and the "updated"
+stamp. Anything without `v: 2` renders through the old card board, so cached
+history days keep working. Local render check: `crystal-assistant\crystal_app_smoke\todaycheck.mjs`.
 
 ### Key split
 

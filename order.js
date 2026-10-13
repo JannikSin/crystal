@@ -8,17 +8,21 @@
 // replaced ran 2026-08 to 2026-10-13).
 //
 // The order (tribunal Plan Gate, 2026-10-13):
-//   0 overdue, most overdue first
+//   0 overdue, most overdue first (more than three fold into one row placed
+//     after the recruiter and due-today rows)
 //   1 recruiter rows (L38: a recruiter email sat unseen three weeks; above coursework)
 //   2 due today
 //   3 today's action cards (paper, interview rep, outreach block)
-//   4 dated rows, soonest first
-//   5 undated rows from the live sections (recruiter, desk, swept in, NOW), in note order
+//   4 dated rows due within a week, soonest first
+//   5 undated rows from the live sections (recruiter, desk, swept in, NOW), in
+//     note order, labelled "no date" so an unparsed date is said, not hidden
+//   6 dated rows a week or more out
 // Each row says why it is where it is, in two or three words, because a
 // computed order is only trusted when it shows its reason.
 
 export const CAP = 7;          // one screen; the rest is "N more" (the board below has all of it)
 export const OVERDUE_FOLD = 3; // more than this many overdue collapse into one row
+export const SOON_DAYS = 7;    // a dated row this far out or more ranks below undated NOW rows
 
 // undated rows only count from the sections that hold this week's work; a row
 // "on a trigger" or "after Sunday" is not next just because it has no date
@@ -56,14 +60,22 @@ export function nextList(front, actions, today) {
   (f.due || []).forEach((r) => add(r, "Due", 999)); // read-only doctor rows after the tickable ones
 
   const out = [];
-  for (const { r, section, secIdx, order: o } of seen.values()) {
+  const t0 = Date.parse(today + "T12:00:00");
+  for (const { r: raw, section, secIdx, order: o } of seen.values()) {
+    // `days` is recomputed against the PHONE's today: the laptop's figure is
+    // frozen at build time, so on a brief from yesterday "due today" would
+    // still say due today when it is a day over (tribunal Realist)
+    const dd = raw.due ? Math.round((Date.parse(raw.due + "T12:00:00") - t0) / 86400000) : NaN;
+    const r = isNaN(dd) ? raw : { ...raw, days: dd };
     const dated = !!r.due && typeof r.days === "number";
     let rank, reason;
     if (dated && r.days < 0) { rank = 0; reason = dueReason(r, today); }
     else if (RECRUITER.test(section)) { rank = 1; reason = dated ? "recruiter, " + dueReason(r, today) : "recruiter"; }
     else if (dated && r.days === 0) { rank = 2; reason = "due today"; }
-    else if (dated) { rank = 4; reason = dueReason(r, today); }
-    else if (LIVE.test(section)) { rank = 5; reason = sectionLabel(section); }
+    // dated rows a week or more out sit BELOW this week's undated work: a
+    // row due in 83 days is not next (tribunal Engineer)
+    else if (dated) { rank = r.days < SOON_DAYS ? 4 : 6; reason = dueReason(r, today); }
+    else if (LIVE.test(section)) { rank = 5; reason = sectionLabel(section) + ", no date"; }
     else continue;
     out.push({ kind: "row", rank, reason, row: r, section, key: [rank, dated ? r.days : 0, secIdx, o] });
   }
@@ -73,10 +85,16 @@ export function nextList(front, actions, today) {
     return 0;
   });
 
+  // A pile of overdue rows is folded into one row, and the fold sits AFTER
+  // the recruiter and due-today rows: ten stale rows in slot one hid the real
+  // top item (tribunal Usability, 2026-10-13). Three or fewer stay on top.
   const over = out.filter((x) => x.rank === 0);
   let rows = out;
   if (over.length > OVERDUE_FOLD) {
-    rows = [{ kind: "overdue", rank: 0, reason: over.length + " overdue", rows: over }, ...out.filter((x) => x.rank !== 0)];
+    const fold = { kind: "overdue", rank: 0, reason: over.length + " overdue", rows: over };
+    const rest = out.filter((x) => x.rank !== 0);
+    const at = rest.findIndex((x) => x.rank > 2);
+    rows = at === -1 ? [...rest, fold] : [...rest.slice(0, at), fold, ...rest.slice(at)];
   }
   return { rows: rows.slice(0, CAP), more: Math.max(0, rows.length - CAP) };
 }
@@ -104,7 +122,11 @@ export function anchorsFor(front, todayIso, now) {
   // "next" is the first anchor not yet started; one in progress is "now"
   const current = list.find((a) => a.end && a.at.getTime() <= t && a.end.getTime() > t) || null;
   const next = list.find((a) => a.at.getTime() > t) || null;
-  return { list, current, next };
+  // no anchors key at all (an older laptop build, or the calendar failed) or
+  // none for today (a brief from yesterday) is NOT "nothing fixed today": the
+  // calendar simply has not reached the phone (tribunal Realist)
+  const loaded = !!front && Array.isArray(front.anchors) && !!front.asof && String(front.asof).slice(0, 10) === todayIso;
+  return { list, current, next, loaded };
 }
 
 export function clock(d) {
