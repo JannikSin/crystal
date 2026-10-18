@@ -65,8 +65,8 @@ export function queueCapture(text) {
 // The Desk inbox rides the same FIFO pump. The Worker's /desk route never
 // returns any 4xx but 401, so the drop-the-head rule below can never eat a
 // Desk note the way a validation 400 would.
-export function queueDesk(text) {
-  const item = { type: "desk", date: todayIso(), text, at: nowIso() };
+export function queueDesk(text, route) {
+  const item = { type: "desk", date: todayIso(), text, at: nowIso(), route: route || "" };
   const q = lsGet("brief.queue", []);
   q.push(item);
   const queued = lsSet("brief.queue", q);
@@ -130,7 +130,8 @@ export function flush() {
   const d = q[0];
   const path = d.type === "capture" ? "/capture" : d.type === "newsread" ? "/newsread"
     : d.type === "desk" ? "/desk" : "/ticks";
-  const body = d.type === "capture" || d.type === "desk" ? { date: d.date, text: d.text, at: d.at }
+  const body = d.type === "capture" ? { date: d.date, text: d.text, at: d.at }
+    : d.type === "desk" ? { date: d.date, text: d.text, at: d.at, route: d.route || "" }
     : d.type === "newsread" ? { date: d.date, ids: d.ids }
     : d;
   fetch(WORKER + path, {
@@ -228,7 +229,10 @@ export function flushUploads() {
           // secs is what the PHONE clocked. The drain compares it against the
           // duration the transcriber measured, so "it cut out" stops being a
           // feeling and becomes two numbers that either agree or do not.
-          ? "/deskaudio" + (rec.secs ? "?secs=" + encodeURIComponent(rec.secs) : "")
+          // route is the tab the bubble was opened on, so the ticket says
+          // where the note came from
+          ? "/deskaudio?" + [rec.secs ? "secs=" + encodeURIComponent(rec.secs) : "",
+            rec.route ? "route=" + encodeURIComponent(rec.route) : ""].filter(Boolean).join("&")
           : "/answer?date=" + encodeURIComponent(rec.date) + "&qid=" + encodeURIComponent(rec.qid || "");
       let r;
       try {

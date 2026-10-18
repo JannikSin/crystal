@@ -2,7 +2,7 @@
 // Each tab module owns its own fetching, caching and rendering; this file only
 // decides which one gets the screen.
 
-import { root, tabbar, key, keyScreen, setRouter, go, el } from "./core.js";
+import { root, tabbar, key, keyScreen, setRouter, go, el, here } from "./core.js";
 import { flush, flushUploads, queueDesk, uploadEnqueue } from "./sync.js";
 import * as today from "./today.js";
 import * as news from "./news.js";
@@ -96,7 +96,7 @@ bsend.addEventListener("click", () => {
     setTimeout(() => { bstat.textContent = ""; }, 2600);
     return;
   }
-  queueDesk(text);
+  queueDesk(text, here());
   bta.value = "";
   bta.style.height = "auto";
   bstat.textContent = "captured, files within the hour";
@@ -110,6 +110,7 @@ const bmic = el("button", { type: "button", class: "mic", "aria-label": "Record 
 let brec = null;
 let bchunks = [];
 let bstart = 0;
+let broute = ""; // the tab the recording started on; the note files against it
 let btick = null;
 let bcap = null;
 // The cap is DERIVED, not chosen. 2026-09-02, David: "fix the transcription
@@ -155,7 +156,7 @@ bmic.addEventListener("click", async () => {
         // against what the transcriber heard. "It seems to cut out at some
         // points" is unfalsifiable until those two numbers sit side by side.
         await uploadEnqueue({
-          kind: "deskaudio", date: new Date().toISOString().slice(0, 10), secs, blob,
+          kind: "deskaudio", date: new Date().toISOString().slice(0, 10), secs, blob, route: broute,
         });
         bstat.textContent = `sent, ${mmss(secs * 1000)}. Transcribes and files within the hour, no need to press Send.`;
       } catch (e) {
@@ -184,6 +185,7 @@ bmic.addEventListener("click", async () => {
     // Same lock, taken before the first byte and dropped at stop.
     void today.holdWakeForRec();
     bstart = Date.now();
+    broute = here();
     brec.start();
     // the elapsed clock is not decoration. It is the instrument that settles
     // "it goes for like 30 seconds and it stops": next time there is a number

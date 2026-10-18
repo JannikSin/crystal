@@ -88,7 +88,14 @@
 //      New module order.js (precached below); today.js rewritten; Career off
 //      the tab bar (it lives in Whiteboard), so career.js leaves the precache.
 //      Reuses existing CSS (.front-due/.duelist/.tl/.boardfold), no app.css.
-const CACHE = "crystal-v35";
+// v37: Listen's switch is podcasts | audio (music retired, never populated);
+//      the audio shelf moves off the top of the queue into the audio mode, and
+//      NEWS mounts today's news episode alone above the front page (chauncey,
+//      David 2026-10-18, Desk d-20261018-516f81bb and -f5cc2200). episode.js,
+//      listen.js, news.js change; no new module, no app.css, no Worker change.
+//      v36 is skipped on purpose: sophon's unshipped heard-tracking bump sits
+//      uncommitted in the main checkout under that number.
+const CACHE = "crystal-v37";
 
 const PRECACHE = [
   "./",

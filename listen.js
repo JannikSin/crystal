@@ -5,6 +5,11 @@
 // underneath. Ticking a row is the same /ticks delta the Today pointer uses
 // (kind "listen", target the episode id), so one act makes one record and two
 // surfaces render it.
+//
+// Two modes on the switch, podcasts and audio (David, 2026-10-18, Desk
+// d-20261018-516f81bb: "get rid of the music tab because I've never used it and
+// it's not even populated. And then make an audio tab"). Audio is the shelf of
+// pushed MP3s from episode.js; podcasts is the queue alone.
 
 import {
   root, el, md, lsGet, lsSet, todayIso, appFooter, emptyState, loadCached, isTab,
@@ -16,7 +21,7 @@ import { episodeCard } from "./episode.js";
 const SECTION = "🎧 Listen";
 const TAG_EMOJI = {
   aero: "🚀", tech: "⚙️", physics: "⚛️", history: "📜", news: "📰",
-  audiobook: "📚", reading: "📖", music: "🎵",
+  audiobook: "📚", reading: "📖",
 };
 const TAGS = ["aero", "tech", "physics", "history", "news", "audiobook"];
 
@@ -49,26 +54,28 @@ function render(data, note, empty) {
   root.appendChild(head);
 
   if (note) root.appendChild(el("div", { class: "banner" }, note));
+
+  // a phone that last sat on the retired music mode lands on podcasts
+  const saved = lsGet("crystal.listenMode", "podcast");
+  const mode = saved === "audio" ? "audio" : "podcast";
+  const sw = el("div", { class: "wswitch", role: "tablist", "aria-label": "Mode" });
+  [["podcast", "podcasts"], ["audio", "audio"]].forEach(([k, label]) => {
+    const b = el("button", { type: "button", "aria-current": k === mode ? "true" : "false" }, label);
+    b.addEventListener("click", () => { lsSet("crystal.listenMode", k); render(data, "", empty); });
+    sw.appendChild(b);
+  });
+  root.appendChild(sw);
+
+  // the audio shelf reads /episode, not the queue payload, so it shows even
+  // on a morning the queue has not synced yet
+  if (mode === "audio") { root.appendChild(episodeCard("all")); root.appendChild(appFooter(reload)); return; }
+
   if (empty || !data) {
     root.appendChild(emptyState("🎧", "No queue yet",
       "The queue syncs from the vault with the morning build."));
     root.appendChild(appFooter(reload));
     return;
   }
-
-  const mode = lsGet("crystal.listenMode", "podcast");
-  const sw = el("div", { class: "wswitch", role: "tablist", "aria-label": "Mode" });
-  [["podcast", "podcasts"], ["music", "music"]].forEach(([k, label]) => {
-    const b = el("button", { type: "button", "aria-current": k === mode ? "true" : "false" }, label);
-    b.addEventListener("click", () => { lsSet("crystal.listenMode", k); render(data, ""); });
-    sw.appendChild(b);
-  });
-  root.appendChild(sw);
-
-  if (mode === "music") { musicMode(data); root.appendChild(appFooter(reload)); return; }
-
-  // the daily walk episode sits above the queue: it is the one thing built for today
-  root.appendChild(episodeCard());
 
   const date = todayIso();
   const local = localTicks(date);
@@ -177,25 +184,6 @@ function queueRow(date, it, done) {
   }
   row.appendChild(meta);
   return row;
-}
-
-function musicMode(data) {
-  const box = el("div", {});
-  box.appendChild(el("p", { class: "empty" },
-    "Music is for the blocks where a podcast would cost you the thinking."));
-  (data.music || []).forEach((m) => {
-    const row = el("article", { class: "qrow" });
-    const meta = el("div", { class: "meta" });
-    meta.appendChild(el("div", { class: "tags" }, "🎵 playlist"));
-    meta.appendChild(el("h3", {}, md(m.label)));
-    if (m.link) meta.appendChild(el("a", { class: "go", href: m.link, target: "_blank", rel: "noopener" }, "open ↗"));
-    row.appendChild(meta);
-    box.appendChild(row);
-  });
-  if (!(data.music || []).length) {
-    box.appendChild(el("p", { class: "empty" }, "No playlists in the payload yet."));
-  }
-  root.appendChild(box);
 }
 
 function audiobookCard(a, activities) {

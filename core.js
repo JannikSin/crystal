@@ -307,6 +307,16 @@ export function isTab(name) {
   return (h || "today") === name;
 }
 
+// The page a Desk note was captured on, as display text: the hash route
+// ("news/<story>", "library"), "today" on the bare URL, and Listen's mode,
+// which lives in localStorage rather than the hash. David, 2026-10-18: "You
+// should be able to tell which tab I'm on when I'm giving you a crystal note."
+export function here() {
+  const h = location.hash.replace(/^#\/?/, "") || "today";
+  if (h.split("/")[0] !== "listen") return h.slice(0, 80);
+  return (h + "/" + (lsGet("crystal.listenMode", "podcast") === "audio" ? "audio" : "podcasts")).slice(0, 80);
+}
+
 // ---------- shared furniture ----------
 export function mastHead(section, title, sub) {
   const head = el("header", {});

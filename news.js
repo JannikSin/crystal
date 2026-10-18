@@ -9,6 +9,7 @@ import {
   root, api, el, md, lsGet, lsSet, go, fmtDay, fmtBuilt, mastHead, appFooter, emptyState, isTab,
 } from "./core.js";
 import { readSetOf, markRead } from "./sync.js";
+import { episodeCard } from "./episode.js";
 
 let news = null;
 // scroll offset of the front page when a story was opened, so the back
@@ -105,6 +106,12 @@ function renderNews(offlineNote, noEdition) {
     root.appendChild(el("div", { class: "banner" },
       "Degraded edition: the compile could not read the sources, so nothing here carries a score."));
   }
+
+  // today's Fitz and Simmons episode is the first thing on the page, today's
+  // only; older ones live in Listen > Audio (David, 2026-10-18, Desk
+  // d-20261018-f5cc2200). Same shelf node on every redraw, so a story tap and
+  // back does not cut the episode off.
+  root.appendChild(episodeCard("news"));
 
   if (noEdition || !news) {
     root.appendChild(emptyState("🗞", "No edition yet",
