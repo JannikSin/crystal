@@ -93,6 +93,13 @@ header .strap{font-family:var(--serif);font-style:italic;color:var(--dim);
   stroke-linecap:round;stroke-linejoin:round}
 #tabbar button[aria-current="true"]{color:var(--accent)}
 #tabbar button:active{background:var(--press)}
+#tabbar button{position:relative}
+#tabbar .tabdot{position:absolute;top:0;left:calc(50% + 6px);min-width:15px;height:15px;padding:0 4px;
+  border-radius:8px;background:var(--accent);color:var(--card);font-size:.55rem;line-height:15px;letter-spacing:0;
+  text-align:center;font-weight:700}
+.foryou{margin:4px 0 14px}
+.foryou .fydot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);
+  margin-right:8px;vertical-align:middle}
 
 .days{display:flex;gap:7px;margin:14px -14px 0;padding:2px 14px 6px;overflow-x:auto;
   -webkit-overflow-scrolling:touch;scrollbar-width:none}

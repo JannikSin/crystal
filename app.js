@@ -52,6 +52,8 @@ function route() {
 }
 
 setRouter(route);
+// the Library tab's count of new notes written for him, painted from the saved vault at launch
+library.paintBadge();
 tabbar.querySelectorAll("button").forEach((b) => {
   b.addEventListener("click", () => go("#/" + b.getAttribute("data-tab")));
 });

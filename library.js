@@ -18,7 +18,7 @@
 
 import {
   root, api, el, md, lsGet, lsSet, lsDel, idbGet, idbSet, go, mastHead, appFooter,
-  emptyState, isTab,
+  emptyState, isTab, todayIso,
 } from "./core.js";
 import { filesCard } from "./files.js";
 
@@ -62,6 +62,7 @@ function load(force) {
       .then((data) => {
         library = data;
         renderIndex("");
+        paintBadge();
         // A refused write means no offline reading, which is the whole point
         // of this tab, so it is said out loud. With IndexedDB it should take
         // private browsing or a full disk, not a big vault, but the promise is
@@ -85,6 +86,58 @@ function load(force) {
 }
 
 const notes = () => (library && library.notes) || [];
+
+// ---------- for you ----------
+// David, 2026-10-18: "I never open this tab and I never really look at things. So how can we change that and
+// how should I be using this?" The index opened on two dozen worker session notes titled by codeword, written
+// for the sessions, not for him. So it now opens on what is NEW and written for him: at most five notes
+// from his own folders that arrived on this phone in the last week and that he has not opened, each with
+// its one-line summary. The Library tab carries the count, so he can see from any tab when there is
+// something to read.
+// "Arrived", not "updated": the boards (Tasks, Dashboard, Stock Research) are rewritten every hour, and
+// tested against the live vault an "updated this week" rule put 62 notes and 9+ on the tab. A note's first
+// appearance is what marks a new write-up, so the phone remembers the day it first saw each id. The first
+// run baselines everything already there, so only what lands afterwards counts.
+const NOT_FOR_YOU = ["Sessions", "System", "Lanes"];
+const SEEN_KEY = "crystal.libSeen";   // {"<id>": 1}: opened on this phone
+const KNOWN_KEY = "crystal.libKnown"; // {"<id>": "YYYY-MM-DD"}: the day this phone first saw it ("" = baseline)
+const FRESH_DAYS = 7;
+
+// The day each note first appeared, filled in place. Exported, with forYou, for tools/test_library_foryou.mjs.
+export function learn(all, known, today) {
+  const first = !Object.keys(known).length;
+  all.forEach((n) => { if (!(n.id in known)) known[n.id] = first ? "" : today; });
+  return known;
+}
+
+export function forYou(all, seen, known, today) {
+  const cut = new Date(today.getTime() - FRESH_DAYS * 864e5).toISOString().slice(0, 10);
+  return all
+    .filter((n) => NOT_FOR_YOU.indexOf(n.folder) < 0 && known[n.id] && known[n.id] >= cut && !seen[n.id])
+    .sort((a, b) => String(known[b.id]).localeCompare(String(known[a.id])) ||
+      String(b.updated || "").localeCompare(String(a.updated || "")));
+}
+
+const seenMap = () => lsGet(SEEN_KEY, {}) || {};
+function knownMap(all) {
+  const known = learn(all, lsGet(KNOWN_KEY, {}) || {}, todayIso());
+  lsSet(KNOWN_KEY, known);
+  return known;
+}
+const fresh = (all) => forYou(all, seenMap(), knownMap(all), new Date());
+
+// the count on the Library tab button, from the saved vault, so it shows offline and from any tab
+export function paintBadge() {
+  cachedLibrary().then((lib) => {
+    const btn = document.querySelector('#tabbar button[data-tab="library"]');
+    if (!btn) return;
+    const n = lib ? fresh(lib.notes || []).length : 0;
+    let dot = btn.querySelector(".tabdot");
+    if (!n) { if (dot) dot.remove(); return; }
+    if (!dot) { dot = el("span", { class: "tabdot", "aria-label": "new to read" }); btn.appendChild(dot); }
+    dot.textContent = n > 9 ? "9+" : String(n);
+  }).catch(() => {});
+}
 
 // ---------- id resolution ----------
 // The pusher slugifies the vault-relative path; this repeats the rule so a
@@ -293,6 +346,29 @@ function renderIndex(note, noLibrary) {
     return;
   }
 
+  // For you: what is new and written for him, ahead of everything else
+  const news = fresh(notes());
+  const fy = el("section", { class: "foryou" });
+  fy.appendChild(el("div", { class: "eyebrow" }, "for you"));
+  if (!news.length) {
+    fy.appendChild(el("p", { class: "empty" }, "Nothing new since you last looked. Everything else is below."));
+  }
+  news.slice(0, 5).forEach((n) => {
+    const row = el("button", { type: "button", class: "librow fyrow" });
+    const t = el("div", { class: "lt" });
+    t.appendChild(el("span", { class: "fydot", "aria-label": "unread" }));
+    t.appendChild(el("span", {}, md(n.title)));
+    row.appendChild(t);
+    // a summary of bare frontmatter dashes ("---", seen on Stock Research) says nothing: leave it off
+    if (n.summary && /\w/.test(n.summary)) row.appendChild(el("div", { class: "ls" }, md(n.summary)));
+    row.appendChild(el("div", { class: "lm" }, md(n.folder + " · updated " + String(n.updated).slice(0, 10) + " · " +
+      Math.max(1, Math.round(n.body.length / 1100)) + " min")));
+    row.addEventListener("click", () => go("#/library/" + n.id));
+    fy.appendChild(row);
+  });
+  if (news.length > 5) fy.appendChild(el("p", { class: "lm" }, (news.length - 5) + " more new below."));
+  root.appendChild(fy);
+
   // Folder chips. With 48 notes the index is longer than a phone screen, so
   // "where are the papers" was a scroll hunt. One tap now answers it.
   const allFolders = [];
@@ -353,13 +429,18 @@ function renderIndex(note, noLibrary) {
     }
     const folders = [];
     hits.forEach((n) => { if (folders.indexOf(n.folder) < 0) folders.push(n.folder); });
+    // session notes go last: they are the sessions' records, and they used to be the first screen
+    if (folders.indexOf("Sessions") >= 0) folders.push(folders.splice(folders.indexOf("Sessions"), 1)[0]);
     folders.forEach((folder) => {
       const sec = el("section", { class: "libfolder" });
       sec.appendChild(el("div", { class: "eyebrow" }, md(folder || "vault root")));
       hits.filter((n) => n.folder === folder).forEach((n) => {
         const row = el("button", { type: "button", class: "librow" });
-        row.appendChild(el("div", { class: "lt" }, md(n.title)));
-        if (n.summary) row.appendChild(el("div", { class: "ls" }, md(n.summary)));
+        // a session note leads with what the session did; its codeword title is the small print
+        const sess = folder === "Sessions" && n.summary;
+        row.appendChild(el("div", { class: "lt" }, md(sess ? n.summary : n.title)));
+        if (sess) row.appendChild(el("div", { class: "ls" }, md(n.title)));
+        else if (n.summary) row.appendChild(el("div", { class: "ls" }, md(n.summary)));
         const meta = [];
         if (n.updated) meta.push("updated " + String(n.updated).slice(0, 10));
         meta.push(Math.max(1, Math.round(n.body.length / 1100)) + " min");
@@ -398,6 +479,9 @@ function renderNote(id) {
   const n = notes().find((x) => x.id === id);
   if (!n) { go("#/library"); return; }
   if (!isTab("library")) return;
+  // opened = read, for "for you" and the tab count
+  const seen = seenMap();
+  if (!seen[n.id]) { seen[n.id] = 1; lsSet(SEEN_KEY, seen); paintBadge(); }
   root.innerHTML = "";
 
   const back = el("button", { type: "button", class: "backbtn" }, "← the library");

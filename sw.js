@@ -95,7 +95,10 @@
 //      listen.js, news.js change; no new module, no app.css, no Worker change.
 //      v36 is skipped on purpose: sophon's unshipped heard-tracking bump sits
 //      uncommitted in the main checkout under that number.
-const CACHE = "crystal-v37";
+// v38: LIBRARY opens on "for you" (at most five new notes written for him, unread dots), session notes
+//      go last and lead with what the session did, and the Library tab shows the count of new notes
+//      (chauncey, David's yes 2026-10-18). library.js, app.js and app.css change together.
+const CACHE = "crystal-v38";
 
 const PRECACHE = [
   "./",
