@@ -136,6 +136,13 @@ export function episodeCard(scope = "all") {
   return shelf;
 }
 
+// The scope's shelf while it is playing, else null. A NEWS story page mounts
+// it so opening a story does not detach the <audio> and stop the episode.
+export function playingShelf(scope) {
+  const s = shelves[scope];
+  return s && s.playing ? s.node : null;
+}
+
 function refresh(s) {
   api("/episode")
     .then((data) => {

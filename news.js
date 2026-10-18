@@ -9,7 +9,7 @@ import {
   root, api, el, md, lsGet, lsSet, go, fmtDay, fmtBuilt, mastHead, appFooter, emptyState, isTab,
 } from "./core.js";
 import { readSetOf, markRead } from "./sync.js";
-import { episodeCard } from "./episode.js";
+import { episodeCard, playingShelf } from "./episode.js";
 
 let news = null;
 // scroll offset of the front page when a story was opened, so the back
@@ -204,6 +204,9 @@ function renderStory(s) {
   const back = el("button", { type: "button", class: "backbtn" }, "← the dispatch");
   back.addEventListener("click", () => go("#/news"));
   root.appendChild(back);
+  // an episode already playing follows you into the story instead of stopping
+  const onAir = playingShelf("news");
+  if (onAir) root.appendChild(onAir);
 
   const art = el("article", { class: "art" });
   art.appendChild(el("div", { class: "eyebrow" }, catLabel(s.cat)));
