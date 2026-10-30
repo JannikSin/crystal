@@ -96,7 +96,12 @@ bsend.addEventListener("click", () => {
     setTimeout(() => { bstat.textContent = ""; }, 2600);
     return;
   }
-  queueDesk(text);
+  // queueDesk answers false when storage refused the write: keep the text in
+  // the box so a full or private-mode phone never shows "captured" over a loss.
+  if (!queueDesk(text)) {
+    bstat.textContent = "not saved on this phone, copy it first";
+    return;
+  }
   bta.value = "";
   bta.style.height = "auto";
   bstat.textContent = "captured, files within the hour";
