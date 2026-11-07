@@ -69,15 +69,18 @@ export function nextList(front, actions, today) {
     const r = isNaN(dd) ? raw : { ...raw, days: dd };
     const dated = !!r.due && typeof r.days === "number";
     let rank, reason;
-    if (dated && r.days < 0) { rank = 0; reason = dueReason(r, today); }
-    else if (RECRUITER.test(section)) { rank = 1; reason = dated ? "recruiter, " + dueReason(r, today) : "recruiter"; }
+    const rec = RECRUITER.test(section);
+    // an overdue recruiter row says so and never folds (below): a late recruiter
+    // email hidden inside "5 overdue" is the L38 failure this rank exists for
+    if (dated && r.days < 0) { rank = 0; reason = (rec ? "recruiter, " : "") + dueReason(r, today); }
+    else if (rec) { rank = 1; reason = dated ? "recruiter, " + dueReason(r, today) : "recruiter"; }
     else if (dated && r.days === 0) { rank = 2; reason = "due today"; }
     // dated rows a week or more out sit BELOW this week's undated work: a
     // row due in 83 days is not next (tribunal Engineer)
     else if (dated) { rank = r.days < SOON_DAYS ? 4 : 6; reason = dueReason(r, today); }
     else if (LIVE.test(section)) { rank = 5; reason = sectionLabel(section) + ", no date"; }
     else continue;
-    out.push({ kind: "row", rank, reason, row: r, section, key: [rank, dated ? r.days : 0, secIdx, o] });
+    out.push({ kind: "row", rank, reason, row: r, section, rec, key: [rank, dated ? r.days : 0, secIdx, o] });
   }
   (actions || []).forEach((it, i) => out.push({ kind: "action", rank: 3, reason: "today", item: it, key: [3, 0, 0, i] }));
   out.sort((a, b) => {
@@ -88,11 +91,13 @@ export function nextList(front, actions, today) {
   // A pile of overdue rows is folded into one row, and the fold sits AFTER
   // the recruiter and due-today rows: ten stale rows in slot one hid the real
   // top item (tribunal Usability, 2026-10-13). Three or fewer stay on top.
-  const over = out.filter((x) => x.rank === 0);
+  // Overdue recruiter rows stay out of the fold and keep slot one.
+  const foldable = (x) => x.rank === 0 && !x.rec;
+  const over = out.filter(foldable);
   let rows = out;
   if (over.length > OVERDUE_FOLD) {
     const fold = { kind: "overdue", rank: 0, reason: over.length + " overdue", rows: over };
-    const rest = out.filter((x) => x.rank !== 0);
+    const rest = out.filter((x) => !foldable(x));
     // ...but never past the cap: with 26 rows due today the fold fell off the
     // screen and the overdue pile vanished (tribunal Realist, loop 1)
     const found = rest.findIndex((x) => x.rank > 2);

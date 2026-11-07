@@ -37,6 +37,15 @@ assert.equal(rows[1].reason, "4 overdue");
 assert.deepEqual(rows[1].rows.map((r) => r.row.id), ["d", "c", "b", "a"]);
 assert.ok(rows.length <= CAP);
 
+// an overdue recruiter row never hides inside the fold, and says recruiter
+const recLate = { board: [{ title: "🚨 RECRUITER", rows: [row("rl", -2)] },
+  { title: "NOW", rows: [row("a", -1), row("b", -2), row("c", -3), row("d", -4)] }] };
+({ rows } = nextList(recLate, [], T));
+assert.equal(rows[0].row.id, "rl");
+assert.equal(rows[0].reason, "recruiter, 2 days over");
+assert.equal(rows[1].kind, "overdue");
+assert.deepEqual(rows[1].rows.map((r) => r.row.id), ["d", "c", "b", "a"]);
+
 // anchors: only today's, plus lights out on a school night, next and current
 const fa = { anchors: [
   { t: "2026-10-12T09:30-04:00", end: "2026-10-12T10:20-04:00", title: "yesterday", cal: "Classes" },
