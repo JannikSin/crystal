@@ -121,10 +121,27 @@ export function syncStamp(text) {
 // ---------- the JSON queue pump ----------
 let flushing = false;
 
+// DOCTRINE Article 6: a delta the Worker refused (a 400, a 429 on the 201st
+// capture of a day) is moved here, not destroyed, and the stamp says so in
+// words instead of "synced". Capped so a bad day cannot fill storage.
+const DEAD_MAX = 50;
+export function deadLetter(d, status) {
+  const dead = lsGet("brief.dead", []);
+  dead.push(Object.assign({}, d, { status, deadAt: nowIso() }));
+  lsSet("brief.dead", dead.slice(-DEAD_MAX));
+}
+
+// "synced", or "synced, 1 not accepted (429)" while today holds refused deltas
+export function idleStamp(dead, today) {
+  const mine = (dead || []).filter((x) => x && x.date === today);
+  if (!mine.length) return "synced";
+  return "synced, " + mine.length + " not accepted (" + mine[mine.length - 1].status + ")";
+}
+
 export function flush() {
   if (flushing) return;
   const q = lsGet("brief.queue", []);
-  if (!q.length) { syncStamp("synced"); flushUploads(); return; }
+  if (!q.length) { syncStamp(idleStamp(lsGet("brief.dead", []), todayIso())); flushUploads(); return; }
   if (!navigator.onLine) { syncStamp(q.length + " waiting for signal"); return; }
   flushing = true;
   const d = q[0];
@@ -143,7 +160,9 @@ export function flush() {
     // retrying it forever wedges everything behind it. 401 is the exception,
     // because that is an auth STATE, not a bad delta: the key screen is already
     // up, the delta is still good, and dropping it would lose a real tick.
+    // A refused head leaves the queue but goes to the dead letter, not the bin.
     if (r.ok || (r.status >= 400 && r.status < 500 && r.status !== 401)) {
+      if (!r.ok) deadLetter(d, r.status);
       const q2 = lsGet("brief.queue", []);
       q2.shift();
       lsSet("brief.queue", q2);
