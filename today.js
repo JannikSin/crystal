@@ -588,8 +588,21 @@ function paintMeter() {
 // ---------- the reward strip ----------
 function latchKey() { return "crystal.reveal." + (brief ? brief.date : todayIso()); }
 
+// The pick is computed on a repaint, so a phone left open at 9:40 pm kept
+// "until 22:00" on screen past the hour (DOCTRINE 2.6). One timer repaints at
+// 22:00; the visibilitychange handler covers a phone that slept through it.
+let rewardTimer = null;
+
 function paintReward() {
+  clearTimeout(rewardTimer);
+  rewardTimer = null;
   if (!rewardBox || !brief) return;
+  const at = new Date();
+  if (at.getHours() < 22) {
+    const ten = new Date(at);
+    ten.setHours(22, 0, 0, 0);
+    rewardTimer = setTimeout(paintReward, ten - at + 1000);
+  }
   const latch = lsGet(latchKey(), { daily: false, full: false });
   const r = computeReward(brief, doneMap, latch, swapIdx, new Date());
   if (r.latch.daily !== latch.daily || r.latch.full !== latch.full) lsSet(latchKey(), r.latch);
@@ -1164,6 +1177,8 @@ document.addEventListener("visibilitychange", () => {
   // RL9: the phone was in a pocket over midnight. The board on screen is
   // yesterday's, so go get today's before he ticks anything against it.
   if (isTab("today") && !viewDate && brief && brief.date !== todayIso()) loadToday(true);
+  // back after 22:00 with the same day's board: the evening grant has expired
+  else paintReward();
 });
 
 // ---------- scoreboard, cards, capture ----------
