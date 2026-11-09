@@ -186,7 +186,7 @@ function role(request, env) {
 
 // The phone reads everything it renders and writes only what the user taps.
 // It never pushes a payload, never touches raw answer audio, never deletes.
-const PHONE_POST = ["/ticks", "/capture", "/newsread", "/scan", "/answer", "/desk", "/deskapprove", "/deskaudio"];
+const PHONE_POST = ["/ticks", "/capture", "/newsread", "/scan", "/answer", "/desk", "/deskapprove", "/deskaudio", "/clock"];
 function phoneAllowed(method, path) {
   if (method === "GET") return path !== "/answer" && path !== "/deskaudio";
   if (method === "POST") return PHONE_POST.includes(path);
@@ -1078,6 +1078,65 @@ export default {
         await env.STORE.put("episodeidx", JSON.stringify(items));
         return json(200, { ok: true, id, remaining: items.length });
       }
+    }
+
+    // ---------- clock: the day clock (staircase, David 2026-11-09) ----------
+    // "time how long i spend doing each thing cause only when i have data and
+    // consistency can i tell how i can change." The phone posts one whole
+    // snapshot per local day (clockcore.snapshot) and each post REPLACES the
+    // last, so a dropped post heals on the next one and nothing here merges.
+    // The laptop reads a range for the Sunday review (crystal_clock.py).
+    // A malformed event is DROPPED, not refused: sync.js loses the whole queue
+    // head on a 4xx, and one bad row must not cost the day.
+    if (path === "/clock" && method === "POST") {
+      const { body, err } = await readBody(request, 256 * 1024);
+      if (err) return err;
+      const date = String(body?.date || "");
+      if (!DATE_RE.test(date)) return json(400, { error: "date required" });
+      const cat = (v) => clip(v, 24).toLowerCase().replace(/[^a-z0-9-]/g, "");
+      const ev = (e) => (e && Number.isFinite(Number(e.at)) && cat(e.cat)
+        ? { at: Math.round(Number(e.at)), cat: cat(e.cat), sub: clip(e.sub, 40) } : null);
+      const events = (Array.isArray(body.events) ? body.events : []).slice(0, 400).map(ev).filter(Boolean);
+      const ig = Number(body.ig);
+      const out = {
+        date,
+        tz: Number.isFinite(Number(body.tz)) ? Math.round(Number(body.tz)) : 0,
+        start: ev(body.start),
+        events,
+        ig: body.ig !== null && Number.isFinite(ig) && ig >= 0 && ig <= 1440 ? Math.round(ig) : null,
+        updated: new Date().toISOString(),
+      };
+      await env.STORE.put(`clock:${date}`, JSON.stringify(out), { expirationTtl: 400 * 24 * 3600 });
+      return json(200, { ok: true, date, events: events.length });
+    }
+    if (path === "/clock" && method === "GET") {
+      // ?date=D for one day, or ?from=D&to=D for at most 62 days (missing days skipped)
+      const from = url.searchParams.get("from") || qdate;
+      const to = url.searchParams.get("to") || qdate;
+      if (!DATE_RE.test(from) || !DATE_RE.test(to)) return json(400, { error: "date or from+to required" });
+      const days = [];
+      for (let d = new Date(from + "T12:00:00Z"); d <= new Date(to + "T12:00:00Z") && days.length < 62;
+        d.setUTCDate(d.getUTCDate() + 1)) {
+        const v = await env.STORE.get(`clock:${d.toISOString().slice(0, 10)}`);
+        if (v) days.push(JSON.parse(v));
+      }
+      return json(200, { days });
+    }
+    // The categories and course tags, pushed by the laptop so the public repo
+    // never holds his course list and a Sunday review can change a category
+    // without an app deploy. The phone reads it; only the laptop writes it.
+    if (path === "/clockconfig" && method === "GET") {
+      const raw = await env.STORE.get("clock:config");
+      return raw200(raw || JSON.stringify({ cats: null, courses: [] }));
+    }
+    if (path === "/clockconfig" && method === "POST") {
+      if (who !== "laptop") return json(403, { error: "laptop key required" });
+      const { raw, body, err } = await readBody(request, 32 * 1024);
+      if (err) return err;
+      if (body?.cats !== null && body?.cats !== undefined && !Array.isArray(body.cats))
+        return json(400, { error: "cats must be a list or null" });
+      await env.STORE.put("clock:config", raw);
+      return json(200, { ok: true });
     }
 
     // ---------- file: PDFs and images for the Library tab ----------

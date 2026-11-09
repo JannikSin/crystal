@@ -33,6 +33,11 @@ gave each tab its own layout language:
   its own upload pump.
 - `reward.js`: the earned-fun engine, a pure function (see `tools/test_reward.mjs`).
 - `today.js` `news.js` `markets.js` `money.js` `shopping.js` `library.js` `listen.js`: one tab each.
+- `clock.js` + `clockcore.js`: the Day clock tab and the now-doing pill on every tab (staircase,
+  2026-11-09). A switch log in localStorage; each changed day posts whole to `/clock` through the
+  JSON queue (replaces, never merges). Course tags come from `/clockconfig` (laptop-written).
+  Arithmetic is pure, see `tools/test_clock.mjs`; routes in `tools/test_clock_route.mjs`. The
+  laptop reads it with `crystal-assistant\crystal_clock.py` (archive `_clock\`, week report).
 - `order.js`: Today's priority order, fixed anchors and staleness, pure (see `tools/test_order.mjs`).
   The order rules live there and nowhere else.
 - `app.js`: the router table and boot.
@@ -52,7 +57,7 @@ The Worker takes two roles on the `x-brief-key` header, and only that header
 - `BRIEF_KEY` / `BRIEF_KEYS`: the laptop. Every route, including pushing
   payloads and reading or deleting recorded audio.
 - `PHONE_KEY` / `PHONE_KEYS`: this app. GET on payload routes, POST on
-  `/ticks`, `/capture`, `/newsread`, `/scan`, `/answer`. Nothing else.
+  `/ticks`, `/capture`, `/newsread`, `/scan`, `/answer`, `/desk*`, `/clock`. Nothing else.
 
 Both accept a comma separated set so a key can rotate without a window of 401s.
 Put the phone key in the app, never the laptop key.

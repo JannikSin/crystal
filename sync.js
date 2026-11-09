@@ -113,6 +113,19 @@ function markCapSent(d) {
   if (list) list.dispatchEvent(new CustomEvent("caps-changed"));
 }
 
+// The day clock's snapshot for one day (clock.js). Coalesced: a newer
+// snapshot of the same day REPLACES the one still waiting in the queue, so a
+// day of taps offline is one post when signal returns, not two hundred.
+export function queueClock(snap) {
+  const q = lsGet("brief.queue", []);
+  const i = q.findIndex((d) => d.type === "clock" && d.date === snap.date);
+  const item = Object.assign({ type: "clock" }, snap);
+  // never replace the head while it may be in flight; append behind it
+  if (i > 0 || (i === 0 && !flushing)) q[i] = item; else q.push(item);
+  lsSet("brief.queue", q);
+  flush();
+}
+
 export function syncStamp(text) {
   const e = document.getElementById("sync");
   if (e) e.textContent = text;
@@ -129,10 +142,11 @@ export function flush() {
   flushing = true;
   const d = q[0];
   const path = d.type === "capture" ? "/capture" : d.type === "newsread" ? "/newsread"
-    : d.type === "desk" ? "/desk" : "/ticks";
+    : d.type === "desk" ? "/desk" : d.type === "clock" ? "/clock" : "/ticks";
   const body = d.type === "capture" ? { date: d.date, text: d.text, at: d.at }
     : d.type === "desk" ? { date: d.date, text: d.text, at: d.at, route: d.route || "" }
     : d.type === "newsread" ? { date: d.date, ids: d.ids }
+    : d.type === "clock" ? { date: d.date, tz: d.tz, start: d.start, events: d.events, ig: d.ig }
     : d;
   fetch(WORKER + path, {
     method: "POST",

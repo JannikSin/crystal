@@ -1129,3 +1129,75 @@ header.aisle h1{font-family:var(--serif);font-weight:600;letter-spacing:-.01em}
 .erates button[aria-pressed="true"]{font-weight:700;outline:2px solid currentColor}
 .echapters{display:flex;flex-direction:column;gap:4px;margin-top:8px}
 .echapters button{text-align:left;padding:8px 10px;border-radius:10px;white-space:pre}
+
+/* ------------------------------------------------------------ day clock -- */
+/* staircase, David 2026-11-09. The pill rides every tab (left, opposite the
+   bubble) so the running block is never out of sight; .ask is the idle catch.
+   Neutral colours only: this is data for the Sunday review, not a grade. */
+.clockpill{position:fixed;left:14px;bottom:80px;z-index:39;max-width:calc(100vw - 96px);
+  padding:8px 13px;border-radius:99px;border:1px solid var(--soft-edge);background:var(--card);
+  color:var(--accent-ink);font-family:var(--mono);font-size:.72rem;letter-spacing:.02em;
+  box-shadow:var(--shadow);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clockpill.ask{background:var(--warnbg);color:var(--warn);border-color:color-mix(in srgb, var(--warn) 35%, var(--edge))}
+.clockpill[hidden]{display:none}
+.clocknow{margin:14px 0 0;padding:16px;border-radius:16px;background:var(--card);
+  border:1px solid var(--edge);box-shadow:var(--shadow)}
+.clocknow .cnlabel{font-family:var(--serif);font-weight:600;font-size:1.5rem;line-height:1.2}
+.clocknow .cnsince{font-family:var(--mono);font-size:.8rem;color:var(--dim);margin-top:4px}
+.cnhint{font-size:.78rem;color:var(--faint);margin:6px 0 0;line-height:1.45}
+.clockask{margin-top:12px;padding:10px 12px;border-radius:11px;background:var(--warnbg);color:var(--warn)}
+.clockask p{margin:0 0 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.clockask button,.clockretro button,.cgsubs button,.igrow button,.cerow button,.clockadd{
+  min-height:40px;padding:8px 14px;margin:0 6px 6px 0;border-radius:99px;border:1px solid var(--edge);
+  background:var(--card);color:var(--accent-ink);cursor:pointer;font-size:.86rem}
+.clockretro{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin-top:12px}
+.clockretro span{font-size:.82rem;color:var(--dim);margin-right:8px;margin-bottom:6px}
+.clocktime,.clocksel,.clocknum{font-size:16px;min-height:40px;padding:6px 10px;border-radius:10px;
+  border:1px solid var(--edge);background:var(--bg);color:var(--ink);font-family:var(--sans);margin:0 6px 6px 0}
+.clocknum{width:84px}
+.clocksel{max-width:100%}
+.clockgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 0}
+.clockgrid .cg{min-height:52px;padding:10px 12px;border-radius:13px;border:1px solid var(--edge);
+  background:var(--card);color:var(--ink);text-align:left;font-size:.95rem;cursor:pointer;line-height:1.25}
+.clockgrid .cg.work{border-left:3px solid var(--accent)}
+.clockgrid .cg.on{background:var(--accent);border-color:var(--accent);color:#fff}
+@media(prefers-color-scheme:dark){.clockgrid .cg.on{color:#16141f}}
+.clockgrid .cg:active{transform:scale(.98)}
+.cgsubs{grid-column:1 / -1;display:flex;flex-wrap:wrap;padding:6px 2px 0}
+.cgsubs button.on{background:var(--soft);border-color:var(--soft-edge)}
+.clocksum{margin:18px 0 0;padding:14px 16px;border-radius:16px;background:var(--card);border:1px solid var(--edge)}
+.csrow{display:flex;align-items:baseline;gap:8px;padding:3px 0;font-size:.9rem}
+.csrow span{flex:1;min-width:0}
+.csrow b{font-family:var(--mono);font-weight:500}
+.csrow i{font-style:normal;font-family:var(--mono);font-size:.75rem;color:var(--faint);min-width:52px;text-align:right}
+.csrow.big{font-size:1.02rem}
+.csrow.big b{font-size:1.1rem;color:var(--accent-ink)}
+.csrow.sub{padding-left:14px;color:var(--dim);font-size:.82rem}
+.cslist{margin-top:8px;padding-top:8px;border-top:1px solid var(--hairline)}
+.clockig{margin-top:10px;padding-top:10px;border-top:1px solid var(--hairline);font-size:.9rem}
+.igrow{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin-top:8px}
+.igrow span{font-size:.8rem;color:var(--dim);margin:0 8px 6px 0;flex-basis:100%}
+.igrow button{margin-bottom:6px}
+.clockh{font-family:var(--serif);font-size:1.15rem;margin:24px 0 0}
+.clocktl{margin-top:8px}
+.ctrow{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;width:100%;align-items:baseline;
+  padding:11px 12px;margin:0 0 6px;border-radius:11px;border:1px solid var(--edge);background:var(--card);
+  color:var(--ink);text-align:left;cursor:pointer;font-size:.9rem}
+.ctrow.work{border-left:3px solid var(--accent)}
+.ctrow.sel{border-color:var(--soft-edge);background:var(--soft)}
+.ctrow .ctt{font-family:var(--mono);font-size:.74rem;color:var(--dim);white-space:nowrap}
+.ctrow .ctn{min-width:0;overflow-wrap:anywhere}
+.ctrow .ctd{font-family:var(--mono);font-size:.8rem}
+.clockedit{margin:-2px 0 10px;padding:12px;border-radius:11px;background:var(--soft);border:1px solid var(--soft-edge)}
+.clockedit label{display:flex;flex-wrap:wrap;align-items:center;gap:0 8px;margin-bottom:6px}
+.clockedit label span{font-size:.8rem;color:var(--dim);min-width:84px}
+.clockedit button.primary,.cerow button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+@media(prefers-color-scheme:dark){.clockedit button.primary{color:#16141f}}
+.clockedit > button.primary{min-height:40px;padding:8px 18px;border-radius:99px;border:1px solid var(--accent);cursor:pointer;margin-top:6px}
+.cerow{display:flex;flex-wrap:wrap;margin-top:6px}
+.clockadd{margin-top:6px}
+.clockweek{margin-top:8px;padding:10px 14px;border-radius:14px;background:var(--card);border:1px solid var(--edge)}
+.cwrow{display:grid;grid-template-columns:1fr 64px 64px 64px;gap:6px;padding:4px 0;font-size:.88rem}
+.cwrow b{font-family:var(--mono);font-weight:500;text-align:right;font-size:.82rem}
+.cwrow.head b{color:var(--faint);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase}
+.cwrow.sel span{color:var(--accent-ink);font-weight:600}

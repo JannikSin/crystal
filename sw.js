@@ -98,7 +98,11 @@
 // v38: LIBRARY opens on "for you" (at most five new notes written for him, unread dots), session notes
 //      go last and lead with what the session did, and the Library tab shows the count of new notes
 //      (chauncey, David's yes 2026-10-18). library.js, app.js and app.css change together.
-const CACHE = "crystal-v38";
+// v39: the Day clock (staircase, David 2026-11-09). New modules clock.js and
+//      clockcore.js (precached below), a Clock tab, and the now-doing pill on
+//      every tab. Deploy the Worker (/clock, /clockconfig) FIRST; the first
+//      open of each day re-posts the last 7 days, so an early 404 heals.
+const CACHE = "crystal-v39";
 
 const PRECACHE = [
   "./",
@@ -109,6 +113,8 @@ const PRECACHE = [
   "./reward.js",
   "./today.js",
   "./order.js",
+  "./clock.js",
+  "./clockcore.js",
   "./news.js",
   "./money.js",
   "./shopping.js",
