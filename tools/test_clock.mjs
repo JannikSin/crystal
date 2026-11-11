@@ -83,5 +83,44 @@ eq(C.fmtDur(95 * M), "1h 35m", "duration words");
 eq(C.fmtClock(at(14, 5)), "2:05 pm", "12-hour clock");
 eq(C.fmtClock(at(0, 0)), "12:00 am", "midnight");
 
+// ---- sophon review, 2026-11-09 ----
+// normalize is idempotent even when a same-instant replacement lands on the
+// activity before it (A, then B and A at one instant, used to leave A, A)
+const twice = [{ id: "a", at: at(1), cat: "gym" }, { id: "b", at: at(2), cat: "meals" }, { id: "c", at: at(2), cat: "gym" }];
+eq(C.normalize(twice).length, 1, "same-instant replacement collapses into the block before");
+eq(C.normalize(C.normalize(twice)), C.normalize(twice), "normalize is idempotent");
+
+// a start time is never in the future, and a squeezed block does not jump its neighbour
+eq(C.current(C.backdate(log, last.id, now + 5 * H, now)).at, now, "backdate is capped at now");
+const tight = [{ id: "a", at: at(1), cat: "gym" }, { id: "b", at: at(1, 1), cat: "meals" }, { id: "c", at: at(1, 2), cat: "purpl" }];
+eq(C.backdate(tight, "b", at(0)).map((e) => e.id), ["a", "b", "c"], "a block squeezed under 2 min stays in order");
+eq(C.backdate(tight, "b", at(0))[1].at, at(1, 1), "and keeps its time");
+
+// typed times: 11:00 pm typed at 7 am is last night; 6:30 am typed at 7 am is today
+eq(C.lastAt("23:00", at(7)), d0 - 1 * H, "11:00 pm typed in the morning is last night");
+eq(C.lastAt("06:30", at(7)), at(6, 30), "an earlier time today stays today");
+eq(C.lastAt("07:00", at(7)), at(7), "exactly now is now");
+eq(C.endAfter(d0 - 0.5 * H, "01:00"), at(1), "11:30 pm to 1:00 am ends the next day");
+eq(C.endAfter(at(13), "14:00"), at(14), "a same-day end stays on the day");
+const f0 = C.dayBounds("2026-11-01")[0]; // 25 h day
+eq(C.endAfter(f0 - 0.5 * H, "03:00") - f0, 4 * H, "end time across the DST fall-back night is the wall clock 3:00 am");
+
+// the forgotten Sleep tap, fixed the next morning: homework ran from 9 pm, he
+// slept at 11 pm, opens the app at 7 am and types 11:00 pm
+const night = [{ id: "h", at: d0 - 3 * H, cat: "hw", sub: "" }];
+const fixed = night.concat([{ id: "sl", at: C.lastAt("23:00", at(7)), cat: "sleep", sub: "" }]);
+eq(C.totals(fixed, d0 - 24 * H, d1, at(7), C.DEFAULT_CATS).by, { hw: 2 * H, sleep: 8 * H }, "sleep lands at last night's 11 pm, not at 7 am");
+
+// rebuild: the Worker's day snapshots give back the same log (ids aside)
+const strip = (l) => C.normalize(l).map((e) => [e.at, e.cat, e.sub || ""]);
+const snaps = [C.snapshot(log, "2026-11-08", {}), C.snapshot(log, "2026-11-09", {})];
+eq(strip(C.rebuild(snaps, id)), strip(log), "rebuild from two day snapshots is the original log");
+eq(strip(C.rebuild([C.snapshot(log, "2026-11-09", {})], id)), strip(log), "one snapshot carries the block running at midnight");
+eq(C.rebuild([], id), [], "no snapshots, empty log");
+
+eq(C.fmtHours(11.6 * H), "11.6 h", "hours keep one decimal past ten");
+eq(C.fmtHours(43.44 * H), "43.4 h", "week hours keep one decimal");
+eq(C.fmtDur(-5 * M), "0m", "a duration is never negative");
+
 console.log(fails ? `${fails} of ${n} FAILED` : `all ${n} passed`);
 process.exit(fails ? 1 : 0);

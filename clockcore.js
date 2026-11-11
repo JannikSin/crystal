@@ -42,8 +42,12 @@ export function normalize(log) {
   const out = [];
   for (const e of s) {
     const prev = out[out.length - 1];
-    if (prev && prev.at === e.at) { out[out.length - 1] = e; continue; }
-    if (prev && prev.cat === e.cat && (prev.sub || "") === (e.sub || "")) continue;
+    // Same instant: the later entry wins. Drop the earlier one and compare
+    // again against what is now last, so the result never holds two adjacent
+    // entries of one activity (normalize(normalize(x)) equals normalize(x)).
+    if (prev && prev.at === e.at) out.pop();
+    const p = out[out.length - 1];
+    if (p && p.cat === e.cat && (p.sub || "") === (e.sub || "")) continue;
     out.push(e);
   }
   return out;
@@ -113,12 +117,14 @@ export function addDays(iso, k) {
 
 // "I started this N minutes ago": move the latest switch back, but never to or
 // before the switch it follows, which would swallow that block entirely.
-export function backdate(log, id, at) {
+// `now` (optional) is a ceiling too: a start time is never in the future.
+export function backdate(log, id, at, now) {
   const n = normalize(log);
   const i = n.findIndex((e) => e.id === id);
   if (i < 0) return n;
   const floor = i > 0 ? n[i - 1].at + 60000 : -Infinity;
-  const ceil = i + 1 < n.length ? n[i + 1].at - 60000 : Infinity;
+  const ceil = Math.min(i + 1 < n.length ? n[i + 1].at - 60000 : Infinity, Number.isFinite(now) ? now : Infinity);
+  if (floor > ceil) return n; // squeezed between two switches under 2 min apart: nowhere to move
   const t = Math.min(Math.max(at, floor), ceil);
   return normalize(n.map((e, k) => (k === i ? { ...e, at: t } : e)));
 }
@@ -148,6 +154,24 @@ export function paint(log, start, end, cat, sub, mkId, now) {
     kept.push({ id: mkId(), at: stop, cat: resume.cat, sub: resume.sub || "" });
   }
   return normalize(kept);
+}
+
+// ---------- typed times ----------
+// A time input gives "HH:MM" with no date. Typed at 7 am, "23:00" means last
+// night, not tonight: the latest moment with that reading at or before `now`.
+export function lastAt(hhmm, now) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const d = new Date(now);
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime();
+  return t <= now ? t : new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, h, m).getTime();
+}
+// The first moment after `start` that reads "HH:MM" (an end time: 11:30 pm to
+// 1:00 am ends on the next calendar day).
+export function endAfter(start, hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const d = new Date(start);
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime();
+  return t > start ? t : new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, h, m).getTime();
 }
 
 // ---------- the idle catch ----------
@@ -184,16 +208,27 @@ export function snapshot(log, iso, extras) {
   };
 }
 
+// The reverse: day snapshots (what the Worker holds) back into one switch log,
+// for a phone whose storage was wiped. Same rule as crystal_clock.py switches().
+export function rebuild(days, mkId) {
+  const ds = (days || []).filter((d) => d && d.date).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const at = new Map();
+  const put = (e) => { if (e && Number.isFinite(e.at) && e.cat) at.set(e.at, { id: mkId(), at: e.at, cat: e.cat, sub: e.sub || "" }); };
+  if (ds.length) put(ds[0].start);
+  for (const d of ds) for (const e of d.events || []) put(e);
+  return normalize([...at.values()]);
+}
+
 // ---------- words ----------
 export function fmtDur(ms) {
-  const m = Math.round(ms / 60000);
+  const m = Math.max(0, Math.round(ms / 60000));
   if (m < 60) return m + "m";
   const h = Math.floor(m / 60), r = m % 60;
   return r ? h + "h " + r + "m" : h + "h";
 }
 export function fmtHours(ms) {
   const h = ms / 3600e3;
-  return (h >= 10 ? Math.round(h) : Math.round(h * 10) / 10) + " h";
+  return Math.round(h * 10) / 10 + " h"; // one decimal always: 11.6 of 12 must not read as 12
 }
 export function fmtClock(ms) {
   const d = new Date(ms);

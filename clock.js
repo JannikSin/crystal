@@ -58,6 +58,23 @@ function save(log, fromMs) {
   return n;
 }
 
+// Rebuild the log from the Worker's day snapshots (60 days, the route's cap is
+// 62), merged with anything tapped here meanwhile. Returns the days found.
+function restore() {
+  const to = todayIso();
+  return api("/clock?from=" + C.addDays(to, -60) + "&to=" + to).then((r) => {
+    const days = (r && r.days) || [];
+    if (!days.length) return 0;
+    const igs = lsGet(IG, {});
+    for (const d of days) if (Number.isFinite(d.ig) && !(d.date in igs)) igs[d.date] = d.ig;
+    lsSet(IG, igs);
+    const merged = C.rebuild(days, uid).concat(getLog());
+    lsSet("crystal.clock.sent", to); // the copy just read is the server's own; no need to post it back
+    save(merged, Date.now());        // today only: a tap made while this loaded must reach the server
+    return days.length;
+  }, (e) => { if (e === "empty") return 0; throw e; });
+}
+
 // ---------- the pill, on every tab ----------
 let pill = null;
 let pillTick = null;
@@ -69,7 +86,11 @@ export function mountPill() {
   paintPill();
   pillTick = setInterval(paintPill, 30000);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") { paintPill(); if (isTab("clock")) render(); }
+    if (document.visibilityState !== "visible") return;
+    paintPill();
+    // Coming back from Screen Time with a number half typed, or mid-edit of a
+    // block: a re-render would empty the field. Repaint only when nothing is open.
+    if (isTab("clock") && !busy()) render();
   });
   // The first open of a day re-posts the last 7 days whole. It shows the laptop
   // a sleep block that crossed midnight before the first tap of the morning,
@@ -85,6 +106,10 @@ export function mountPill() {
     }
     lsSet("crystal.clock.sent", todayIso());
   }
+}
+function busy() {
+  const a = document.activeElement;
+  return editing !== null || adding || (a && root.contains(a) && /^(INPUT|SELECT)$/.test(a.tagName));
 }
 export function paintPill() {
   if (!pill) return;
@@ -110,7 +135,13 @@ let ticker = null;
 export function open(parts) {
   viewDay = parts && parts[1] && /^\d{4}-\d{2}-\d{2}$/.test(parts[1]) ? parts[1] : "";
   render();
-  api("/clockconfig").then((c) => { lsSet(CFG, c); if (isTab("clock")) render(); }).catch(() => {});
+  api("/clockconfig").then((c) => {
+    // re-render only when it changed: a repaint a second after open would
+    // empty a field he has already started on
+    const same = JSON.stringify(c) === JSON.stringify(lsGet(CFG, null));
+    lsSet(CFG, c);
+    if (!same && isTab("clock") && !busy()) render();
+  }).catch(() => {});
   flush();
 }
 
@@ -124,7 +155,7 @@ function switchTo(cat, sub) {
   const e = { id: uid(), at, cat, sub: sub || "" };
   save(log.concat([e]), at);
   lsSet(OK, 0);
-  retro = pendingAt ? null : { id: e.id, until: now + 120000 };
+  retro = pendingAt ? null : { id: e.id, until: now + 120000, at0: at };
   pendingAt = null;
   openSub = false;
   render();
@@ -135,7 +166,9 @@ function backBy(min) {
   const log = getLog();
   const e = C.normalize(log).find((x) => x.id === retro.id);
   if (!e) { retro = null; render(); return; }
-  save(C.backdate(log, e.id, e.at - min * 60000), e.at - min * 60000);
+  // from the moment of the tap, not from the last press: −5m then −15m is 15, not 20
+  const t = retro.at0 - min * 60000;
+  save(C.backdate(log, e.id, t, Date.now()), Math.min(t, e.at));
   render();
 }
 
@@ -145,6 +178,7 @@ function atOn(iso, hhmm) {
   const [y, mo, d] = iso.split("-").map(Number);
   return new Date(y, mo - 1, d, h, m).getTime();
 }
+const dayWord = (ms) => new Date(ms).toLocaleDateString("en-US", { weekday: "long" });
 const hhmm = (ms) => { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
 
 function timeInput(value) {
@@ -198,6 +232,17 @@ function render() {
   } else {
     nowCard.appendChild(el("div", { class: "cnlabel" }, "Nothing running yet"));
     nowCard.appendChild(el("div", { class: "cnsince" }, "Tap what you are doing right now. From then on, tap only when you switch."));
+    // A new phone, a reinstall or cleared site data leaves this log empty while
+    // the Worker still holds every day. Offered, never automatic: a second
+    // device that restored by itself would start posting its stale copy.
+    const rb = el("button", { type: "button", class: "clockadd" }, "Had a clock on this phone before? Bring it back");
+    const rmsg = el("p", { class: "cnhint" }, "");
+    rb.addEventListener("click", () => {
+      rb.disabled = true; rmsg.textContent = "Looking...";
+      restore().then((n) => { if (n) render(); else { rb.disabled = false; rmsg.textContent = "No saved days found."; } })
+        .catch(() => { rb.disabled = false; rmsg.textContent = "Could not reach the server. Try again with signal."; });
+    });
+    nowCard.appendChild(rb); nowCard.appendChild(rmsg);
   }
   const ask = C.needsCheck(log, now, lsGet(OK, 0));
   if (ask && !pendingAt) {
@@ -215,8 +260,12 @@ function render() {
     const b = el("div", { class: "clockask" });
     b.appendChild(el("p", {}, "I switched at"));
     const ti = timeInput(hhmm(pendingAt));
-    ti.addEventListener("change", () => { if (ti.value) pendingAt = Math.min(Date.now(), atOn(today, ti.value)); });
+    const when = el("span", { class: "cnhint" }, "");
+    const paintWhen = () => { when.textContent = pendingAt < C.dayBounds(todayIso())[0] ? "(before midnight, " + dayWord(pendingAt) + ")" : ""; };
+    ti.addEventListener("change", () => { if (ti.value) { pendingAt = C.lastAt(ti.value, Date.now()); paintWhen(); } });
     b.firstChild.appendChild(ti);
+    b.firstChild.appendChild(when);
+    paintWhen();
     b.appendChild(el("p", { class: "cnhint" }, "then tap what you switched to."));
     const cancel = el("button", { type: "button" }, "Cancel");
     cancel.addEventListener("click", () => { pendingAt = null; render(); });
@@ -235,8 +284,9 @@ function render() {
     ti.setAttribute("aria-label", "exact start time");
     ti.addEventListener("change", () => {
       if (!ti.value) return;
-      const t = atOn(today, ti.value);
-      save(C.backdate(getLog(), retro.id, t), t);
+      const t = C.lastAt(ti.value, Date.now());
+      const was = (C.normalize(getLog()).find((x) => x.id === retro.id) || { at: t }).at;
+      save(C.backdate(getLog(), retro.id, t, Date.now()), Math.min(t, was));
       render();
     });
     r.appendChild(ti);
@@ -327,7 +377,7 @@ function render() {
 
   // ---- the day, block by block ----
   root.appendChild(el("h2", { class: "clockh" }, "The day"));
-  root.appendChild(renderDays(viewDay ? day : "", (back, iso) => {
+  root.appendChild(renderDays(day, (back, iso) => {
     viewDay = back ? iso : ""; editing = null; adding = false;
     history.replaceState(null, "", viewDay ? "#/clock/" + viewDay : "#/clock");
     render();
@@ -393,7 +443,7 @@ function editor(b, day) {
     let from = b.realStart;
     if (!startsEarlier && ti.value && ti.value !== hhmm(b.realStart)) {
       const t = Math.min(Date.now(), atOn(day, ti.value));
-      log = C.backdate(log, b.id, t);
+      log = C.backdate(log, b.id, t, Date.now());
       from = Math.min(from, t);
     }
     save(log, from);
@@ -424,9 +474,11 @@ function adder(day) {
   const go1 = el("button", { type: "button", class: "primary" }, "Add it");
   go1.addEventListener("click", () => {
     if (!a.value || !z.value) { msg.textContent = "Set both times."; return; }
-    const s = atOn(day, a.value);
-    let e = atOn(day, z.value);
-    if (e <= s) e += 86400e3; // 11:30 pm to 1:00 am runs past midnight
+    // On today a start later than now can only mean last night (11:30 pm typed
+    // at 8 am). The end is the first such time after the start, so 11:30 pm to
+    // 1:00 am runs past midnight on any day, DST included.
+    const s = day === todayIso() ? C.lastAt(a.value, Date.now()) : atOn(day, a.value);
+    const e = C.endAfter(s, z.value);
     if (s >= Date.now()) { msg.textContent = "That starts in the future."; return; }
     const [cat, sub] = splitSel(sel.value);
     save(C.paint(getLog(), s, e, cat, sub, uid, Date.now()), s);

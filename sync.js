@@ -118,7 +118,10 @@ function markCapSent(d) {
 // day of taps offline is one post when signal returns, not two hundred.
 export function queueClock(snap) {
   const q = lsGet("brief.queue", []);
-  const i = q.findIndex((d) => d.type === "clock" && d.date === snap.date);
+  // the LAST match: while the head is in flight a same-day copy is appended
+  // behind it, and the next tap must replace that copy, not append a third
+  let i = -1;
+  for (let k = q.length - 1; k >= 0; k--) if (q[k].type === "clock" && q[k].date === snap.date) { i = k; break; }
   const item = Object.assign({ type: "clock" }, snap);
   // never replace the head while it may be in flight; append behind it
   if (i > 0 || (i === 0 && !flushing)) q[i] = item; else q.push(item);

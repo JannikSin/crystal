@@ -102,7 +102,13 @@
 //      clockcore.js (precached below), a Clock tab, and the now-doing pill on
 //      every tab. Deploy the Worker (/clock, /clockconfig) FIRST; the first
 //      open of each day re-posts the last 7 days, so an early 404 heals.
-const CACHE = "crystal-v39";
+// v40: Day clock fixes (sophon, 2026-11-09). A typed time means the latest such
+//      time at or before now (11:00 pm typed at 7 am is last night), the
+//      "started earlier" buttons count from the tap, a half-typed field
+//      survives coming back to the app, hours keep one decimal, and an empty
+//      phone can bring its log back from the Worker. clock.js, clockcore.js
+//      and sync.js change together; the Worker does not change.
+const CACHE = "crystal-v40";
 
 const PRECACHE = [
   "./",
