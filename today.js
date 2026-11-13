@@ -765,14 +765,18 @@ function groupRow(date, it, nested) {
 
 // ---------- the recorder ----------
 // start/stop only. No pause: WebKit's paused MediaRecorder records silence.
-// A rep is one answer, not a lecture: five minutes is the hard stop, and the
-// Worker refuses /answer over 6MB, so anything near that never leaves here.
 // Same arithmetic as the Desk bubble's cap in app.js, and for the same reason:
 // the Worker's /answer cap went 6 MB -> 20 MB on 2026-09-02, so a spoken answer
 // is no longer cut off at five minutes. 14 MB of budget at 64 kbps is about
 // 30 minutes, with headroom left under the Worker cap for container overhead.
-const MAX_REC_MS = Math.floor((14 * 1024 * 1024) / (64000 / 8)) * 1000;
-const MAX_REC_BYTES = 5.5 * 1024 * 1024;
+// The bitrate is SET on the recorder (REC_BPS), not assumed: left at the
+// browser default the old 5.5 MB byte check threw away any take over about
+// five minutes after he had finished speaking (audit 2026-11-06, item 2).
+const REC_BPS = 64000;
+const MAX_REC_MS = Math.floor((14 * 1024 * 1024) / (REC_BPS / 8)) * 1000;
+// last guard before the Worker's 20 MB 413, so an oversize take is refused
+// here, where it can be redone, instead of dying in the upload queue
+const MAX_REC_BYTES = 18 * 1024 * 1024;
 function pickMime() {
   const want = ["audio/mp4", "audio/webm"];
   if (!window.MediaRecorder) return null;
@@ -886,7 +890,9 @@ function recorder(det, it) {
     if (!qid) { note.textContent = "No question id on this item, so nothing to file a recording against."; return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      rec = new MediaRecorder(stream, mime
+        ? { mimeType: mime, audioBitsPerSecond: REC_BPS }
+        : { audioBitsPerSecond: REC_BPS });
       chunks = [];
       rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
       rec.onstop = async () => {
@@ -901,7 +907,7 @@ function recorder(det, it) {
         const blob = new Blob(chunks, { type: (chunks[0] && chunks[0].type) || mime || "audio/mp4" });
         // refused here, where it can be redone, instead of dying as a 413 later
         if (blob.size > MAX_REC_BYTES) {
-          note.textContent = "That is too long to send. Redo it shorter, two minutes is plenty.";
+          note.textContent = "That is too big to send. Redo it shorter.";
           return;
         }
         const level = await rmsOf(blob);
@@ -932,7 +938,7 @@ function recorder(det, it) {
       holdWakeForRec();
       btn.textContent = "Stop";
       btn.setAttribute("data-on", "1");
-      note.textContent = "Recording. Leave the app and it stops and keeps what it has. Five minutes max.";
+      note.textContent = "Recording. Leave the app and it stops and keeps what it has. Thirty minutes max.";
       tick = setInterval(() => {
         const s = Math.floor((Date.now() - t0) / 1000);
         timer.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
