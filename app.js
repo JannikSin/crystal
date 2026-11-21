@@ -223,7 +223,8 @@ panel.appendChild(brow);
 // One line, said once, so the question never has to be asked again.
 panel.appendChild(el("p", { class: "bhint" },
   "Speak: press 🎙, press ⏹, and it is sent. Send is only for typed text. "
-  + "The screen is held awake while you record, up to 5 minutes."));
+  + "The screen is held awake while you record, up to "
+  + Math.floor(BUBBLE_MAX_MS / 60000) + " minutes."));
 bubble.addEventListener("click", () => {
   panel.hidden = !panel.hidden;
   if (!panel.hidden) bta.focus();
