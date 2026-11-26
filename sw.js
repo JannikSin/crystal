@@ -115,7 +115,11 @@
 //      finite "You're caught up" end. news.js, app.css and
 //      index.html change together. Deploy the Worker (/newsimg) FIRST.
 //      Same version: lighthouse's Update tab (update.js, Worker /update) rides along.
-const CACHE = "crystal-v41";
+// v42: the four Leftover Friday fix branches landed together (10/30, 11/06,
+//      11/13, 11/21): sync.js markRead and dead letter, app.js bubble Send,
+//      today.js recorder and evening grant, order.js recruiter rows, core.js
+//      Forget this phone. The Worker does not change.
+const CACHE = "crystal-v42";
 
 const PRECACHE = [
   "./",
