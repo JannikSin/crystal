@@ -33,6 +33,11 @@ const CSS = `
 .upd textarea{display:block;width:100%;min-height:58px;resize:vertical;font:inherit;border:1px solid var(--edge);border-radius:10px;padding:9px;background:var(--bg);color:var(--ink);box-sizing:border-box;margin-top:6px}
 .upd .row{display:flex;align-items:center;gap:10px;margin-top:8px}
 .upd .send{margin-left:auto;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:8px 16px;font:inherit;font-weight:600}
+.upd .inst li{display:flex;align-items:center;gap:10px}
+.upd .inst .t{flex:1}
+.upd .inst .go,.upd .inst .ok{border:1px solid var(--edge);background:var(--press);color:var(--ink);border-radius:10px;padding:7px 11px;font:inherit;font-size:.85rem;font-weight:600;text-decoration:none;white-space:nowrap}
+.upd .inst li.done .t{color:var(--faint);text-decoration:line-through}
+.upd .inst li.done .ok{background:var(--accent);border-color:var(--accent);color:#fff}
 .upd .end{text-align:center;color:var(--dim);margin:26px 0 8px;font-family:var(--serif)}
 `;
 function styleOnce() {
@@ -91,6 +96,35 @@ function render(d, note, empty) {
   if (!d || empty) {
     page.appendChild(emptyState("🌅", "No update yet", "The first one builds tomorrow morning. Tonight, write tomorrow's point below."));
   } else {
+    // David 11/26: "having things on crystal to do instead of instagram". First on the
+    // page, because a free moment is when he opens it. Done greys a row here and tells
+    // the laptop (Desk queue) so tomorrow's picks move on.
+    if (d.instead && d.instead.length) {
+      const c = el("section", { class: "card inst" });
+      c.appendChild(el("h2", {}, "Free moment? Do one"));
+      const ul = el("ul", {});
+      d.instead.forEach((x, n) => {
+        const dk = "upd.inst." + d.date + "." + n;
+        const li = el("li", { class: lsGet(dk, "") ? "done" : "" });
+        li.appendChild(el("div", { class: "t" }, esc(x.text) + (x.mins ? ' <span class="dim">' + x.mins + " min</span>" : "")));
+        if (x.link && /^https:\/\//.test(x.link)) {
+          const a = el("a", { class: "go", href: x.link, target: "_blank", rel: "noopener" }, "Open");
+          li.appendChild(a);
+        }
+        const b = el("button", { type: "button", class: "ok" }, "Done");
+        b.addEventListener("click", () => {
+          if (lsGet(dk, "")) return;
+          if (queueDesk("instead done " + x.text, "#/update") === false) return;
+          lsSet(dk, "1");
+          li.classList.add("done");
+        });
+        li.appendChild(b);
+        ul.appendChild(li);
+      });
+      c.appendChild(ul);
+      page.appendChild(c);
+    }
+
     // today's point
     const pt = el("section", { class: "card" });
     pt.appendChild(el("div", { class: "lab" }, "Today's point"));
@@ -187,7 +221,7 @@ function render(d, note, empty) {
   // the night-before loop: always at the foot, the main event after 3 pm
   if (evening) {
     page.appendChild(writeBox("How did today go?", "What you did against today's point, and one line on why.", "did:", didKey));
-    page.appendChild(writeBox("Tomorrow's point", "One goal for tomorrow and the very first step. Under 3 minutes.", "plan:", tomorrowKey));
+    page.appendChild(writeBox("Tomorrow's point", "One goal for tomorrow and the very first step. Then dead spot: when tomorrow's free stretch is and what fills it. Under 3 minutes.", "plan:", tomorrowKey));
   } else {
     page.appendChild(writeBox("Change today's point", "Only if last night's no longer fits.", "plan:", "upd.replan." + today));
   }

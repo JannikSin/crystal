@@ -119,7 +119,7 @@
 //      11/13, 11/21): sync.js markRead and dead letter, app.js bubble Send,
 //      today.js recorder and evening grant, order.js recruiter rows, core.js
 //      Forget this phone. The Worker does not change.
-const CACHE = "crystal-v43";
+const CACHE = "crystal-v44";
 
 const PRECACHE = [
   "./",
