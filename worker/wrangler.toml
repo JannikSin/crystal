@@ -22,3 +22,7 @@ preview_urls = false
 [[kv_namespaces]]
 binding = "STORE"
 id = "9042abd7aa52412396591702b06d066a"
+
+# paper watchdog: 13 and 14 UTC cover 9:00 am Indiana time in summer and winter (teide 2026-11-25)
+[triggers]
+crons = ["0 13 * * *", "0 14 * * *"]

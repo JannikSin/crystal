@@ -7,7 +7,7 @@
 <!-- Everything the app loads is its own file; the only outbound connection is
      the private Worker. No inline script (the SW registers from app.js), no
      remote anything, no base tag hijack. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://crystal-brief.janniksin.workers.dev; img-src 'self' data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://crystal-brief.janniksin.workers.dev; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#f3f2f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121118" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="./manifest.webmanifest">
@@ -23,6 +23,9 @@
   <button type="button" data-tab="today" aria-current="false">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><circle cx="12" cy="8" r="2.2"/><circle cx="12" cy="16" r="2.2"/><path d="M14.2 8H20M4 16h5.8"/></svg>
     Today</button>
+  <button type="button" data-tab="update" aria-current="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h18M6.5 18a5.5 5.5 0 0 1 11 0"/><path d="M12 5v3M5.2 9.2l2 2M18.8 9.2l-2 2"/></svg>
+    Update</button>
   <button type="button" data-tab="clock" aria-current="false">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4.2l2.6 1.6M10 3h4M12 3v2.5"/></svg>
     Clock</button>

@@ -15,7 +15,9 @@ const STORY_ID_RE = /^[a-z0-9][a-z0-9-]{1,60}$/;
 // writes; the short keys are what news.js normalises them to. Anything else
 // falls through the app's CAT_LABEL table and renders as raw payload text.
 const NEWS_CATS = ["AI/Tech", "Aerospace/Defense", "World/Politics", "Energy/Nuclear",
-  "Sports-discovery", "ai", "aero", "world", "energy", "sports"];
+  "Sports-discovery", "ai", "aero", "world", "energy", "sports",
+  // schlieren's news desk sections (teide, 2026-11-25)
+  "Science", "Business/Markets", "Purdue/Indiana", "science", "markets", "purdue"];
 
 const isStr = (v) => typeof v === "string";
 const isNum = (v) => typeof v === "number" && isFinite(v);
@@ -77,6 +79,24 @@ export function validateNews(p) {
       return `${at} is contested but has no interpretations`;
     if (!isArr(s.tickerTags) || !s.tickerTags.every((t) => isStr(t)))
       return `${at}.tickerTags must be an array of strings`;
+    // The Crystal (teide, 2026-11-25): narrative fields, all optional so an
+    // old-format edition still validates and renders as bullets.
+    if (s.deck !== undefined && !isStr(s.deck)) return `${at}.deck must be a string`;
+    if (s.body !== undefined && (!isArr(s.body) || !s.body.every(isTxt) || s.body.length > 12))
+      return `${at}.body must be an array of 1-12 non-empty paragraphs`;
+    if (s.forYou !== undefined && !isStr(s.forYou)) return `${at}.forYou must be a string`;
+    if (s.img !== undefined && typeof s.img !== "boolean") return `${at}.img must be a boolean`;
+    if (s.imgCredit !== undefined && !isStr(s.imgCredit)) return `${at}.imgCredit must be a string`;
+  }
+  // yesterday's questions, answered: [{q, a, on?, storyId?, at?}]
+  if (p.answers !== undefined) {
+    if (!isArr(p.answers) || p.answers.length > 30) return "answers must be an array of at most 30";
+    for (let i = 0; i < p.answers.length; i++) {
+      const x = p.answers[i];
+      if (!x || !isTxt(x.q) || !isTxt(x.a)) return `answers[${i}] needs q and a`;
+      for (const f of ["on", "storyId", "at"])
+        if (x[f] !== undefined && !isStr(x[f])) return `answers[${i}].${f} must be a string`;
+    }
   }
   return null;
 }

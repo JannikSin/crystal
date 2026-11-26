@@ -108,7 +108,14 @@
 //      survives coming back to the app, hours keep one decimal, and an empty
 //      phone can bring its log back from the Worker. clock.js, clockcore.js
 //      and sync.js change together; the Worker does not change.
-const CACHE = "crystal-v40";
+// v41: NEWS becomes The Crystal (teide, David's yes 2026-11-25: narrative,
+//      replaces the news tab). Photos per story from the Worker (/newsimg,
+//      blob URLs, so index.html CSP adds blob: to img-src), sections that
+//      swipe, narrative stories, an Ask button riding the Desk queue, and a
+//      finite "You're caught up" end. news.js, app.css and
+//      index.html change together. Deploy the Worker (/newsimg) FIRST.
+//      Same version: lighthouse's Update tab (update.js, Worker /update) rides along.
+const CACHE = "crystal-v41";
 
 const PRECACHE = [
   "./",
@@ -122,6 +129,7 @@ const PRECACHE = [
   "./clock.js",
   "./clockcore.js",
   "./news.js",
+  "./update.js",
   "./money.js",
   "./shopping.js",
   "./listen.js",

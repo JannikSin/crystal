@@ -11,6 +11,7 @@ import * as listen from "./listen.js";
 import * as library from "./library.js";
 import * as shopping from "./shopping.js";
 import * as clock from "./clock.js";
+import * as update from "./update.js";
 
 // The Desk TAB is gone (David, 2026-08-17): the bubble below is the write
 // side on every tab, and the board renders at the foot of Today. An old
@@ -21,7 +22,7 @@ import * as clock from "./clock.js";
 // left the precache with sw v35.
 // The Day clock (staircase, David 2026-11-09): its tab, plus the "now doing"
 // pill mounted below so the running block is visible on every tab.
-const ROUTES = { today, clock, news, money, shopping, listen, library };
+const ROUTES = { today, update, clock, news, money, shopping, listen, library };
 // the Career tab's cached payloads (recruiter names, application statuses) have
 // no reader any more; drop them from this phone
 try { localStorage.removeItem("crystal.career"); localStorage.removeItem("crystal.reps"); } catch (e) {}

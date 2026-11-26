@@ -50,6 +50,13 @@ assert.match(validateNews({ ...goodNews, date: "nope" }), /date/);
 assert.match(validateNews({ ...goodNews, stories: "x" }), /stories/);
 assert.match(validateNews({ ...goodNews, stories: [story({ id: "BAD ID" })] }), /id/);
 assert.match(validateNews({ ...goodNews, stories: [story(), story()] }), /duplicate/);
+// The Crystal narrative fields (teide 2026-11-25): optional, typed when present
+assert.equal(validateNews({ ...goodNews, stories: [story({ deck: "d", body: ["p1", "p2"], forYou: "", img: true, imgCredit: "AP" })],
+  answers: [{ q: "why?", a: "because.", on: "x", storyId: "a-b", at: "Tue 3:12 pm" }] }), null, "narrative edition must pass");
+assert.match(validateNews({ ...goodNews, stories: [story({ body: "one string" })] }), /body/);
+assert.match(validateNews({ ...goodNews, stories: [story({ body: ["ok", " "] })] }), /body/);
+assert.match(validateNews({ ...goodNews, stories: [story({ img: "yes" })] }), /img/);
+assert.match(validateNews({ ...goodNews, answers: [{ q: "x" }] }), /answers\[0\]/);
 assert.match(validateNews({ ...goodNews, stories: [story({ score: 0 })] }), /score/);
 assert.match(validateNews({ ...goodNews, stories: [story({ scoreDetail: { reliability: 85 } })] }), /charge/);
 assert.match(

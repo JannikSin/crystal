@@ -80,6 +80,7 @@
 // answer index; last write wins. Fine for one phone; a Durable Object if a
 // second writer appears.
 
+import { handleUpdate } from "./update.js";
 import {
   validateNews,
   validateMarkets,
@@ -129,6 +130,8 @@ const BODY_CAP = {
   "/file": 20 * 1024 * 1024,
 };
 const BLOB_TTL = 14 * 24 * 3600;
+const NEWSIMG_TTL = 4 * 24 * 3600;
+const NEWSIMG_ID_RE = /^[a-z0-9][a-z0-9-]{1,60}$/; // same bound as a news story id
 const FILE_TTL = 30 * 24 * 3600;
 const FILE_TYPES = ["application/pdf", "image/png", "image/jpeg"];
 const DESK_TTL = 30 * 24 * 3600; // backstop for un-drained desk: / deskapprove: keys
@@ -496,6 +499,11 @@ export default {
     if (!who) return json(401, { error: "bad key" });
     if (who === "phone" && !phoneAllowed(method, path))
       return json(403, { error: "laptop key required for this route" });
+    // the Daily Update (lighthouse, 2026-11-25): its own module, same auth
+    if (path === "/update" || path === "/update/seen") {
+      const r = await handleUpdate(request, env, who, path, method, url, { json, raw200, readBody });
+      if (r) return r;
+    }
 
     const qdate = url.searchParams.get("date") || "";
     // POST /desk must be incapable of any 4xx but 401 (sync.js drops the queue
@@ -754,6 +762,28 @@ export default {
       if (bad) return json(400, { error: bad });
       await putDated(env, "news", body.date, raw);
       return json(200, { ok: true, date: body.date, stories: body.stories.length, bytes: raw.length });
+    }
+
+    // ---------- newsimg: one photo per story, The Crystal (teide, 2026-11-25) ----------
+    // The laptop's photo step scrapes og:image from the story's own sources,
+    // resizes to 900 px JPEG and POSTs it here; the phone GETs it with its key
+    // and shows it from a blob URL (img-src stays 'self' data: blob:, no
+    // third-party image host is ever contacted from the phone). 4-day TTL.
+    if (path === "/newsimg") {
+      const id = url.searchParams.get("id") || "";
+      if (!qdate || !NEWSIMG_ID_RE.test(id)) return json(400, { error: "date and story id required" });
+      const k = `newsimg:${qdate}:${id}`;
+      if (method === "POST") {
+        const { buf, err } = await readBlob(request, capFor(path), ["image/jpeg"]);
+        if (err) return err;
+        await env.STORE.put(k, buf, { expirationTtl: NEWSIMG_TTL });
+        return json(200, { ok: true, id, bytes: buf.byteLength });
+      }
+      if (method === "GET") {
+        const buf = await env.STORE.get(k, "arrayBuffer");
+        if (!buf) return json(404, { error: "no photo for that story" });
+        return bytes200(buf, "image/jpeg");
+      }
     }
 
     // ---------- newsread ----------
@@ -1308,4 +1338,34 @@ export default {
 
     return json(404, { error: "not found" });
   },
+
+  // ---------- paper watchdog (teide, 2026-11-25) ----------
+  // The morning job runs on the laptop, and the laptop is often asleep at 7 am,
+  // so the laptop cannot report its own silence. The Worker can: at 9:00 am
+  // Indiana time, if today's paper is not on the Worker, buzz David's phone.
+  // Needs the NTFY_TOPIC secret (a full https://ntfy.sh/<topic> URL); unset =
+  // the watchdog stays quiet. Once per day per KV marker.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(paperWatch(env));
+  },
 };
+
+async function paperWatch(env) {
+  if (!env.NTFY_TOPIC) return;
+  const now = new Date();
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Indiana/Indianapolis", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", hourCycle: "h23",
+  }).formatToParts(now).map((p) => [p.type, p.value]));
+  if (Number(parts.hour) !== 9) return; // the cron fires at 13 and 14 UTC; one of them is 9 am local
+  const today = `${parts.year}-${parts.month}-${parts.day}`;
+  if (await env.STORE.get(`news:${today}`)) return;
+  const mark = `paperwatch:${today}`;
+  if (await env.STORE.get(mark)) return;
+  await env.STORE.put(mark, "1", { expirationTtl: 3 * 24 * 3600 });
+  await fetch(env.NTFY_TOPIC, {
+    method: "POST",
+    headers: { Title: "No paper this morning", Priority: "high", Tags: "newspaper,warning" },
+    body: "It is 9:00 am and today's Crystal has not been published. The laptop was probably asleep at 7 am. Open the laptop; the morning job catches up on wake.",
+  });
+}
