@@ -13,7 +13,17 @@ globalThis.document = { getElementById: () => null };
 globalThis.window = { addEventListener() {} };
 globalThis.localStorage = { length: 0, key: () => null, getItem: () => null, setItem() {}, removeItem() {} };
 
-const { isDone, newer } = await import("../sync.js");
+const { isDone, newer, idleStamp } = await import("../sync.js");
+
+// ---------- idleStamp (DOCTRINE Article 6) ----------
+// an empty queue only says "synced" when nothing of today's was refused
+assert.equal(idleStamp([], "2026-11-06"), "synced");
+assert.equal(idleStamp([{ type: "capture", date: "2026-11-05", status: 429 }], "2026-11-06"), "synced",
+  "yesterday's refusal does not haunt today's stamp");
+assert.equal(
+  idleStamp([{ type: "tick", date: "2026-11-06", status: 400 }, { type: "capture", date: "2026-11-06", status: 429 }], "2026-11-06"),
+  "synced, 2 not accepted (429)",
+);
 
 // ---------- newer ----------
 assert.equal(newer("2026-08-08T09:00:00", "2026-08-08T06:30:00"), true);
