@@ -891,7 +891,7 @@ function recorder(det, it) {
 
   let rec = null, chunks = [], t0 = 0, tick = 0, cap = 0;
   // leaving the app kills the recorder on iOS anyway; stopping it deliberately
-  // keeps the seconds already chunked instead of losing the take
+  // keeps what was recorded instead of losing the take
   const bail = () => {
     if (document.visibilityState !== "visible" && rec && rec.state === "recording") rec.stop();
   };
@@ -943,8 +943,13 @@ function recorder(det, it) {
             : "Saved. Grades run with the 7:30 morning build and land in Whiteboard.");
         paintLive(live);
       };
-      // a timeslice means a chunk lands every 5s, so a killed tab costs seconds
-      rec.start(5000);
+      // NO TIMESLICE, same as the bubble since 2026-08-22 (see app.js). On iOS
+      // Safari a timesliced audio/mp4 recording comes back as fragments that
+      // decoders read only partway, which cut graded answers short. With no
+      // slice, ondataavailable fires once at stop with one well formed file.
+      // The slices never protected anything: they lived in memory, so a killed
+      // tab lost them anyway, and bail() still stops cleanly on leaving.
+      rec.start();
       t0 = Date.now();
       cap = setTimeout(() => { if (rec && rec.state === "recording") rec.stop(); }, MAX_REC_MS);
       document.addEventListener("visibilitychange", bail);
