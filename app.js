@@ -104,7 +104,12 @@ bsend.addEventListener("click", () => {
     setTimeout(() => { bstat.textContent = ""; }, 2600);
     return;
   }
-  queueDesk(text, here());
+  // queueDesk answers false when storage refused the write: keep the text in
+  // the box so a full or private-mode phone never shows "captured" over a loss.
+  if (!queueDesk(text, here())) {
+    bstat.textContent = "not saved on this phone, copy it first";
+    return;
+  }
   bta.value = "";
   bta.style.height = "auto";
   bstat.textContent = "captured, files within the hour";
@@ -224,7 +229,8 @@ panel.appendChild(brow);
 // One line, said once, so the question never has to be asked again.
 panel.appendChild(el("p", { class: "bhint" },
   "Speak: press 🎙, press ⏹, and it is sent. Send is only for typed text. "
-  + "The screen is held awake while you record, up to 5 minutes."));
+  + "The screen is held awake while you record, up to "
+  + Math.floor(BUBBLE_MAX_MS / 60000) + " minutes."));
 bubble.addEventListener("click", () => {
   panel.hidden = !panel.hidden;
   if (!panel.hidden) bta.focus();

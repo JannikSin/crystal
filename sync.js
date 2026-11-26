@@ -98,7 +98,12 @@ export function markRead(date, ids) {
   lsSet("crystal.read." + date, cur.concat(add));
   const q = lsGet("brief.queue", []);
   let found = null;
-  q.forEach((d) => { if (d.type === "newsread" && d.date === date) found = d; });
+  // Index 0 is exempt while a flush is in flight, as in setTick: ids added to
+  // it now would never be sent, because the pump shifts it when the answer lands.
+  q.forEach((d, i) => {
+    if (i === 0 && flushing) return;
+    if (d.type === "newsread" && d.date === date) found = d;
+  });
   if (found) add.forEach((i) => { if (found.ids.indexOf(i) < 0) found.ids.push(i); });
   else q.push({ type: "newsread", date, ids: add });
   lsSet("brief.queue", q);
