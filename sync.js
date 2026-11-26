@@ -70,22 +70,14 @@ export function queueDesk(text, route) {
   const q = lsGet("brief.queue", []);
   q.push(item);
   const queued = lsSet("brief.queue", q);
-  const notes = lsGet("desk.notes." + item.date, []);
-  notes.push({ text, at: item.at, sent: false });
-  lsSet("desk.notes." + item.date, notes);
+  // No local copy of the note: the desk.notes.<date> list it used to write had
+  // no reader once the Desk tab went (v19), never got pruned, and outlived
+  // "Forget this phone" (audit 2026-11-06, item 5). The queue is the record.
   flush();
   // storage refused the write (full, or Safari private mode): the note never
   // reached the queue, so say so instead of flashing "on the desk" over a
   // silent loss (Usability). Same guard setTick already carries.
   return queued;
-}
-
-function markDeskSent(d) {
-  const notes = lsGet("desk.notes." + d.date, []);
-  notes.forEach((n) => { if (n.at === d.at && n.text === d.text) n.sent = true; });
-  lsSet("desk.notes." + d.date, notes);
-  const list = document.getElementById("desklist");
-  if (list) list.dispatchEvent(new CustomEvent("desk-changed"));
 }
 
 export const readSetOf = (date) => lsGet("crystal.read." + date, []);
@@ -190,7 +182,6 @@ export function flush() {
       q2.shift();
       lsSet("brief.queue", q2);
       if (r.ok && d.type === "capture") markCapSent(d);
-      if (r.ok && d.type === "desk") markDeskSent(d);
       flush();
     } else {
       syncStamp(q.length + " not synced (" + r.status + ")");

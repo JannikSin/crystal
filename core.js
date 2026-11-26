@@ -403,7 +403,10 @@ export function forgetPhone() {
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
-      if (k && (k.indexOf("crystal.") === 0 || k.indexOf("brief.") === 0)) localStorage.removeItem(k);
+      // desk.notes.* is the old typed-note copy sync.js used to keep; the exact
+      // prefix, not "desk.", so no sibling app's keys on this origin are touched
+      if (k && (k.indexOf("crystal.") === 0 || k.indexOf("brief.") === 0
+        || k.indexOf("desk.notes.") === 0)) localStorage.removeItem(k);
     }
   } catch (e) {}
   try { indexedDB.deleteDatabase("crystal"); } catch (e) {}
