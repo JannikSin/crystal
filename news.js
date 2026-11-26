@@ -6,8 +6,10 @@
 // swipe right or the back button returns to the same scroll spot.
 //
 // Stories read as narrative (deck + body paragraphs, David 2026-11-25: "i like
-// narative... lets keep it that way"). An edition without a body falls back to
-// the old bullets, so an old or degraded edition still renders.
+// narative... lets keep it that way"). No lists anywhere in a story (David,
+// 2026-11-25 11:15 pm: "in paragraph form to avoid repetition"): the compile
+// gives every story a body, and an old edition without one is set as
+// paragraphs from its facts here. The fold says only what the body does not.
 //
 // Photos come from the Worker (/newsimg), fetched with the key and shown from
 // a blob URL; img-src never reaches a third-party host. Cached in Cache
@@ -357,6 +359,15 @@ function storyShell(posText) {
   return art;
 }
 
+// sentences joined into short paragraphs, never a list
+function paras(arr, per) {
+  const out = [];
+  const ss = (arr || []).map((t) => String(t).trim()).filter(Boolean)
+    .map((t) => (/[.!?"'”’)]$/.test(t) ? t : t + "."));
+  for (let i = 0; i < ss.length; i += per) out.push(ss.slice(i, i + per).join(" "));
+  return out;
+}
+
 function solidFold(s) {
   const isS = scored(s, news);
   const d = s.scoreDetail || {};
@@ -367,12 +378,10 @@ function solidFold(s) {
     : "How solid is this · unscored"));
   const body = el("div", {});
   if (s.evidence) body.appendChild(el("p", {}, "<b>Evidence:</b> " + esc(s.evidence)));
-  [["What is solid", s.solid], ["Not known yet", s.notKnown], ["Who says it", s.whoSays]].forEach(([h, arr]) => {
+  // "What is solid" is the body over again, so it is not shown
+  [["Not known yet", s.notKnown], ["Who says it", s.whoSays]].forEach(([h, arr]) => {
     if (Array.isArray(arr) && arr.length) {
-      body.appendChild(el("h5", {}, h));
-      const ul = el("ul", {});
-      arr.forEach((t) => ul.appendChild(el("li", {}, esc(t))));
-      body.appendChild(ul);
+      body.appendChild(el("p", {}, "<b>" + h + ":</b> " + esc(paras(arr, 99)[0])));
     }
   });
   if (s.primary && s.primary.url) {
@@ -386,10 +395,8 @@ function solidFold(s) {
     body.appendChild(el("p", {}, "This edition was built without an evaluation pass. Read the sources on their own terms."));
   }
   if (s.contested && (s.interpretations || []).length) {
-    body.appendChild(el("h5", {}, "Contested: the facts are agreed, the reading is not"));
-    const ul = el("ul", {});
-    s.interpretations.forEach((t) => ul.appendChild(el("li", {}, esc(t))));
-    body.appendChild(ul);
+    body.appendChild(el("p", {}, "<b>Contested, the facts are agreed and the reading is not:</b> "
+      + esc(paras(s.interpretations, 99)[0])));
   }
   det.appendChild(body);
   return det;
@@ -451,13 +458,9 @@ function renderStory(s) {
     if (s.forYou) art.appendChild(el("p", { class: "np-why" }, '<span class="np-kicker">For you</span><br>' + esc(s.forYou)));
   } else {
     art.appendChild(el("p", { class: "np-deck" }, esc(s.oneLiner)));
-    if (s.facts && s.facts.length) {
-      art.appendChild(el("h4", {}, "What happened"));
-      const ul = el("ul", {});
-      s.facts.forEach((f) => ul.appendChild(el("li", {}, esc(f))));
-      art.appendChild(ul);
-    }
-    if (s.context) { art.appendChild(el("h4", {}, "Background")); art.appendChild(el("p", {}, esc(s.context))); }
+    const prose = el("div", { class: "np-prose" });
+    paras(s.facts, 3).concat(s.context ? [s.context] : []).forEach((p) => prose.appendChild(el("p", {}, esc(p))));
+    art.appendChild(prose);
     if (s.whyItMatters) art.appendChild(el("p", { class: "np-why" }, '<span class="np-kicker">For you</span><br>' + esc(s.whyItMatters)));
   }
 
@@ -489,13 +492,9 @@ function renderTopic() {
     t.body.forEach((p) => prose.appendChild(el("p", {}, esc(p))));
     art.appendChild(prose);
   } else {
-    if (t.facts && t.facts.length) {
-      art.appendChild(el("h4", {}, "The facts"));
-      const ul = el("ul", {});
-      t.facts.forEach((f) => ul.appendChild(el("li", {}, esc(f))));
-      art.appendChild(ul);
-    }
-    if (t.context) art.appendChild(el("p", {}, esc(t.context)));
+    const prose = el("div", { class: "np-prose" });
+    paras(t.facts, 3).concat(t.context ? [t.context] : []).forEach((p) => prose.appendChild(el("p", {}, esc(p))));
+    art.appendChild(prose);
   }
   art.appendChild(askBox({ id: "their-topic", headline: t.title }));
   if (t.sources && t.sources.length) {
