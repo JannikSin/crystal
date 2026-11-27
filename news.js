@@ -22,6 +22,7 @@ import {
 } from "./core.js";
 import { readSetOf, markRead, queueDesk, localTicks, isDone } from "./sync.js";
 import { episodeCard, playingShelf } from "./episode.js";
+import { bodyParas } from "./prose.js";
 
 let news = null;
 let listScroll = 0;
@@ -450,10 +451,11 @@ function renderStory(s) {
     + (s.evidence ? ' <span class="n">· ' + esc(s.evidence) + "</span>" : "")));
   art.appendChild(el("h2", {}, esc(s.headline)));
 
-  if (Array.isArray(s.body) && s.body.length) {
+  const sBody = bodyParas(s.body);
+  if (sBody.length) {
     if (s.deck) art.appendChild(el("p", { class: "np-deck" }, esc(s.deck)));
     const prose = el("div", { class: "np-prose" });
-    s.body.forEach((p) => prose.appendChild(el("p", {}, esc(p))));
+    sBody.forEach((p) => prose.appendChild(el("p", {}, esc(p))));
     art.appendChild(prose);
     if (s.forYou) art.appendChild(el("p", { class: "np-why" }, '<span class="np-kicker">For you</span><br>' + esc(s.forYou)));
   } else {
@@ -487,9 +489,10 @@ function renderTopic() {
   art.appendChild(el("div", { class: "np-pic wide" }, '<div class="np-plate plate-science"><span>' + esc(t.field || "science") + "</span></div>"));
   art.appendChild(el("h2", {}, esc(t.title)));
   if (t.hook) art.appendChild(el("p", { class: "np-deck" }, esc(t.hook)));
-  if (Array.isArray(t.body) && t.body.length) {
+  const tBody = bodyParas(t.body);
+  if (tBody.length) {
     const prose = el("div", { class: "np-prose" });
-    t.body.forEach((p) => prose.appendChild(el("p", {}, esc(p))));
+    tBody.forEach((p) => prose.appendChild(el("p", {}, esc(p))));
     art.appendChild(prose);
   } else {
     const prose = el("div", { class: "np-prose" });

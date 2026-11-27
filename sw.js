@@ -119,7 +119,9 @@
 //      11/13, 11/21): sync.js markRead and dead letter, app.js bubble Send,
 //      today.js recorder and evening grant, order.js recruiter rows, core.js
 //      Forget this phone. The Worker does not change.
-const CACHE = "crystal-v44";
+// v45: prose.js (story body as paragraphs whatever its shape; 11/27 the paper
+//      showed one letter per line). news.js reads bodies through it.
+const CACHE = "crystal-v45";
 
 const PRECACHE = [
   "./",
@@ -133,6 +135,7 @@ const PRECACHE = [
   "./clock.js",
   "./clockcore.js",
   "./news.js",
+  "./prose.js",
   "./update.js",
   "./money.js",
   "./shopping.js",
