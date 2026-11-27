@@ -208,6 +208,21 @@ function render(d, note, empty) {
       page.appendChild(c);
     }
 
+    // what autofix did with the app lines of his Morning report
+    if (d.asked && d.asked.length) {
+      const c = el("section", { class: "card" });
+      c.appendChild(el("h2", {}, "You asked, autofix did"));
+      const ul = el("ul", {});
+      d.asked.forEach((a) => {
+        const li = el("li", {});
+        li.appendChild(el("div", { class: "q" }, '<span class="lane">' + esc(a.app) + "</span>" + esc(a.asked)));
+        li.appendChild(el("div", { class: "a" }, esc(a.did)));
+        ul.appendChild(li);
+      });
+      c.appendChild(ul);
+      page.appendChild(c);
+    }
+
     if (d.voted && d.voted.length) {
       const c = el("section", { class: "card" });
       c.appendChild(el("h2", {}, "You said"));
@@ -216,6 +231,17 @@ function render(d, note, empty) {
       c.appendChild(ul);
       page.appendChild(c);
     }
+  }
+
+  // David 11/27: "after i read the morning update i should give a morning report ...
+  // and in there i can give certain targeted instructions for the autofix."
+  if (d && !empty) {
+    const r = d.reports;
+    page.appendChild(writeBox("Morning report",
+      "Your thoughts after reading, under 2 minutes. Start a line with an app name for autofix "
+      + '("tally: make the score buttons bigger"), it runs at 2:00 pm. "tally plan: ..." sets a standing plan.'
+      + (r && r.of ? " Filed " + r.filed + " of the last " + r.of + " days." : ""),
+      "report:", "upd.report." + today));
   }
 
   // the night-before loop: always at the foot, the main event after 3 pm

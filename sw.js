@@ -121,7 +121,8 @@
 //      Forget this phone. The Worker does not change.
 // v45: prose.js (story body as paragraphs whatever its shape; 11/27 the paper
 //      showed one letter per line). news.js reads bodies through it.
-const CACHE = "crystal-v45";
+// v46: the Update tab's Morning report box and the "You asked, autofix did" card.
+const CACHE = "crystal-v46";
 
 const PRECACHE = [
   "./",
